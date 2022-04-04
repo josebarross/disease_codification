@@ -130,7 +130,8 @@ dmypy.json
 
 # VsCode
 .vscode
+.DS_Store
 
 # Custom files for executing code
-./config.py
-./main.py
+config.py
+main.py
