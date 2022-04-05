@@ -2,4 +2,4 @@ pandas
 flair==0.10
 xgboost==1.5.2
 python-dotenv==0.20.0
-google-cloud-storage==2.2.1
+google-cloud-storage>=2.0
