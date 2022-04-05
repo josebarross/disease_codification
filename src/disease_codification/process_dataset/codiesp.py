@@ -2,8 +2,6 @@ import itertools
 from pathlib import Path
 import pandas as pd
 
-from custom_io import create_dir_if_dont_exist, save_as_pickle
-
 
 def preprocess_codiesp(corpuses_path: Path):
     corpus_path_labels = corpuses_path / "codiesp_codes"
