@@ -1,14 +1,12 @@
 import itertools
-import shutil
 from abc import ABC, abstractmethod
 from functools import partial
 from pathlib import Path
 from typing import Dict
 
 import numpy as np
-from custom_io import save_as_pickle, write_fasttext_file
-from custom_io import create_dir_if_dont_exist
-from process_dataset.mapper import mapper_process_function
+from disease_codification.custom_io import create_dir_if_dont_exist, save_as_pickle, write_fasttext_file
+from disease_codification.process_dataset.mapper import mapper_process_function
 
 
 class Indexer(ABC):
