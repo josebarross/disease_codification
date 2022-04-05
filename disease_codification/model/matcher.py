@@ -27,14 +27,15 @@ class Matcher:
         create_dir_if_dont_exist(models_path / indexer / "matcher-dev")
 
     @classmethod
-    def load(cls, indexers_path, models_path, indexer, train_with_dev: bool = False):
+    def load(cls, indexers_path, models_path, indexer, train_with_dev: bool = False, load_from_gcp: bool = True):
         cls.create_directories(models_path, indexer)
         filename = f'{indexer}/{"matcher" if not train_with_dev else "matcher-dev"}/final-model.pt'
-        download_blob_file(filename, models_path / filename)
+        if load_from_gcp:
+            download_blob_file(filename, models_path / filename)
         classifier = TextClassifier.load(models_path / filename)
         return cls(indexers_path, models_path, [indexer], classifier)
 
-    def save(self, filename: str):
+    def save_to_gcp(self, filename: str):
         upload_blob_file(self.models_path / filename, filename)
 
     def train(self, training_params):
@@ -47,7 +48,7 @@ class Matcher:
             self.classifier = train_transformer_classifier(
                 self.classifier, corpus, self.models_path / filepath, **params
             )
-            self.save(f"{filepath}/final-model.pt")
+            self.save_to_gcp(f"{filepath}/final-model.pt")
             self.eval(self.corpus[indexer].dev)
             self.eval(self.corpus[indexer].test)
 
@@ -55,8 +56,9 @@ class Matcher:
         self.classifier.predict(sentences, label_name="predicted", return_probabilities_for_all_classes=True)
 
     def eval(self, sentences):
+        print("Starting evaluation for MAP of Matcher")
         labels = self.classifier.label_dictionary.get_items()
-        index_labels = {ll.value: i for i, ll in enumerate(labels)}
+        index_labels = {ll: i for i, ll in enumerate(labels)}
         self.predict(sentences)
         avg_precs = []
         for sentence in sentences:
