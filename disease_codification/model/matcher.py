@@ -30,12 +30,12 @@ class Matcher:
     def load(cls, indexers_path, models_path, indexer, train_with_dev: bool = False):
         cls.create_directories(models_path, indexer)
         filename = f'{indexer}/{"matcher" if not train_with_dev else "matcher-dev"}/final-model.pt'
-        download_blob_file("trained-models-jose", filename, models_path / filename)
+        download_blob_file(filename, models_path / filename)
         classifier = TextClassifier.load(models_path / filename)
         return cls(indexers_path, models_path, [indexer], classifier)
 
     def save(self, filename: str):
-        upload_blob_file("trained-models-jose", self.models_path / filename, filename)
+        upload_blob_file(self.models_path / filename, filename)
 
     def train(self, training_params):
         assert len(self.indexers) == len(training_params)

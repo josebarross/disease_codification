@@ -58,5 +58,5 @@ def train_transformer_classifier(
 
 
 def fetch_model(filename_gcp: str, filename_out: Path):
-    download_blob_file("trained-models-jose", filename_gcp, filename_out)
+    download_blob_file(filename_gcp, filename_out)
     return TextClassifier.load(filename_out)
