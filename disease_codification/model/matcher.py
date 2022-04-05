@@ -4,9 +4,9 @@ from typing import List
 
 import numpy as np
 from disease_codification.custom_io import create_dir_if_dont_exist
+from disease_codification.flair_utils import read_corpus, train_transformer_classifier
 from disease_codification.gcp import download_blob_file, upload_blob_file
 from flair.models import TextClassifier
-from flair_utils import read_corpus, train_transformer_classifier
 from sklearn.metrics import average_precision_score
 
 

@@ -3,8 +3,8 @@ import statistics
 from pathlib import Path
 from typing import List
 
+from disease_codification.flair_utils import read_corpus
 from flair.data import Sentence
-from flair_utils import read_corpus
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import average_precision_score
 from sklearn.multiclass import OneVsRestClassifier
