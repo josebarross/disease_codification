@@ -7,6 +7,7 @@ from disease_codification.custom_io import create_dir_if_dont_exist
 from disease_codification.flair_utils import read_corpus, train_transformer_classifier
 from disease_codification.gcp import download_blob_file, upload_blob_file
 from flair.models import TextClassifier
+from flair.data import Sentence
 from sklearn.metrics import average_precision_score
 
 
@@ -49,11 +50,14 @@ class Matcher:
                 self.classifier, corpus, self.models_path / filepath, **params
             )
             self.save_to_gcp(f"{filepath}/final-model.pt")
-            self.eval(corpus.dev)
-            self.eval(corpus.test)
+            self.eval([Sentence("Hola")])
+            # self.eval(corpus.dev)
+            # self.eval(corpus.test)
 
-    def predict(self, sentences):
-        self.classifier.predict(sentences, label_name="predicted", return_probabilities_for_all_classes=True)
+    def predict(self, sentences, return_probabilities=True):
+        self.classifier.predict(
+            sentences, label_name="predicted", return_probabilities_for_all_classes=return_probabilities
+        )
 
     def eval(self, sentences):
         print("Starting evaluation for MAP of Matcher")
