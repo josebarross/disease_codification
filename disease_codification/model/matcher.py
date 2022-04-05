@@ -49,8 +49,8 @@ class Matcher:
                 self.classifier, corpus, self.models_path / filepath, **params
             )
             self.save_to_gcp(f"{filepath}/final-model.pt")
-            self.eval(self.corpus[indexer].dev)
-            self.eval(self.corpus[indexer].test)
+            self.eval(corpus.dev)
+            self.eval(corpus.test)
 
     def predict(self, sentences):
         self.classifier.predict(sentences, label_name="predicted", return_probabilities_for_all_classes=True)
