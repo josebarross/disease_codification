@@ -5,6 +5,7 @@ from flair.datasets import ClassificationCorpus
 from flair.embeddings import TransformerDocumentEmbeddings
 from flair.models import TextClassifier
 from flair.trainers import ModelTrainer
+from disease_codification.custom_io import create_dir_if_dont_exist
 from disease_codification.gcp import download_blob_file
 
 
@@ -32,8 +33,7 @@ def train_transformer_classifier(
     transformer_name="dccuchile/bert-base-spanish-wwm-cased",
     label_type="gold",
 ):
-    if not results_path.exists():
-        results_path.mkdir()
+    create_dir_if_dont_exist(results_path)
     if downsample:
         corpus = corpus.downsample(downsample)
     if not classifier:

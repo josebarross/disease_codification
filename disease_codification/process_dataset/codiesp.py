@@ -1,6 +1,7 @@
 import itertools
 from pathlib import Path
 import pandas as pd
+import random
 
 
 def preprocess_codiesp(corpuses_path: Path):
@@ -23,8 +24,9 @@ def preprocess_labels_df(corpus_path: Path, df_sentences):
     sentences_labels = set(itertools.chain.from_iterable([label for label in df_sentences["labels"].values]))
     for label in sentences_labels:
         if label not in df["label"].values:
-            df.loc[len(df.index)] = [label, None, None]
+            df.loc[len(df.index)] = [label, "Sin descripcion", "Sin descripcion"]
     df["cluster"] = df["label"].str.slice(0, 1)
+    df["split_type"] = get_split_types(df)
     return df
 
 
@@ -43,6 +45,18 @@ def preprocess_sentences_df(corpus_path: Path):
         df_split_type["sentence"] = sentences
         df = pd.concat([df, df_split_type])
     return df.reset_index()
+
+
+def get_split_types(labels_df):
+    len_list = len(labels_df)
+    my_list = get_split("train", len_list) + get_split("dev", len_list)
+    random.shuffle(my_list)
+    return my_list[:len_list]
+
+
+def get_split(split_type, len_list):
+    percentage = {"train": 0.8, "dev": 0.2}
+    return [split_type] * round(len_list * percentage[split_type] + 0.5)
 
 
 def read_sentence(corpus_path: Path, split_type: str, filename: str):

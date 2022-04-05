@@ -38,7 +38,7 @@ class Matcher:
     def save_to_gcp(self, filename: str):
         upload_blob_file(self.models_path / filename, filename)
 
-    def train(self, training_params):
+    def train(self, training_params, upload_to_gcp: bool = False):
         assert len(self.indexers) == len(training_params)
         for indexer, params in zip(self.indexers, training_params):
             print(f"Finetuning for {indexer}")
@@ -48,9 +48,10 @@ class Matcher:
             self.classifier = train_transformer_classifier(
                 self.classifier, corpus, self.models_path / filepath, **params
             )
-            self.save_to_gcp(f"{filepath}/final-model.pt")
-            self.eval(corpus.dev)
-            self.eval(corpus.test)
+            if upload_to_gcp:
+                self.save_to_gcp(f"{filepath}/final-model.pt")
+            self.eval([s for s in corpus.dev])
+            self.eval([s for s in corpus.test])
 
     def predict(self, sentences, return_probabilities=True):
         self.classifier.predict(
@@ -61,7 +62,7 @@ class Matcher:
         print("Starting evaluation for MAP of Matcher")
         labels = self.classifier.label_dictionary.get_items()
         index_labels = {ll: i for i, ll in enumerate(labels)}
-        self.predict(sentences)
+        self.predict(sentences, return_probabilities=True)
         avg_precs = []
         for sentence in sentences:
             avg_precs.append(self._get_aps_of_sentence(sentence, labels, index_labels))
