@@ -5,6 +5,7 @@ from flair.datasets import ClassificationCorpus
 from flair.embeddings import TransformerDocumentEmbeddings
 from flair.models import TextClassifier
 from flair.trainers import ModelTrainer
+from gcp import download_blob_file
 
 
 def read_corpus(data_folder: Path, filename: str):
