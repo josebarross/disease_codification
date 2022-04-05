@@ -17,6 +17,10 @@ from xgboost import XGBClassifier
 from disease_codification.gcp import download_blob_file, upload_blob_file, storage_client
 
 
+def get_cluster(blob):
+    return blob.name.split("/")[-1].split("_")[-1].split(".")[0]
+
+
 class Ranker:
     def __init__(
         self, indexers_path: Path, models_path: Path, indexer: str, cluster_classifier={}, cluster_label_classifier={}
@@ -38,10 +42,8 @@ class Ranker:
     def load(cls, indexers_path: Path, models_path: Path, indexer: str, load_from_gcp: bool = True):
         cls.create_directories(models_path, indexer)
         if load_from_gcp:
-            blobs = storage_client.list_blobs(os.getenv("PROJECT_ID"))
-            clusters = {
-                blob.name.split("/")[-1].split("_")[-1].split(".")[0] for blob in blobs if "matcher" not in blob.name
-            }
+            blobs = storage_client.list_blobs(os.getenv("BUCKET"))
+            clusters = {get_cluster(blob) for blob in blobs if "matcher" not in blob.name}
         else:
             clusters = {filename.split("_")[1] for filename in os.listdir(indexers_path / indexer / "ranker")}
 
