@@ -62,7 +62,7 @@ class Ranker:
         has_incorrect = (
             self.indexers_path / self.indexer / "incorrect-matcher" / f"incorrect_{cluster}_train.txt"
         ).exists()
-        if has_incorrect and "train" in ["train"]:
+        if has_incorrect and "train" in split_types:
             incorrect_matcher_corpus = read_corpus(
                 self.indexers_path / self.indexer / "incorrect-matcher", f"incorrect_{cluster}", only_train=True
             )
