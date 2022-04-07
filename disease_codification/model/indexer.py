@@ -1,19 +1,26 @@
+from enum import Enum
 import itertools
-from abc import ABC, abstractmethod
 from functools import partial
 from pathlib import Path
 from typing import Dict
 
 import numpy as np
 from disease_codification.custom_io import create_dir_if_dont_exist, save_as_pickle, write_fasttext_file
+from disease_codification.process_dataset.cie10 import cluster_assigner
 from disease_codification.process_dataset.mapper import mapper_process_function
 
 
-class Indexer(ABC):
+class ClusteringType(Enum):
+    first_letter = "first_letter"
+    cie10 = "cie10"
+
+
+class Indexer:
     def __init__(
         self, corpus: str, corpuses_path: Path, indexers_path: Path, args_for_clustering: dict = {}, subset: int = None
     ):
         self.corpus = corpus
+        self.corpuses_path = corpuses_path
         self.indexer_path = indexers_path / corpus
         self.args_for_clustering = args_for_clustering
         self.df_sentences, self.df_labels = mapper_process_function[corpus](corpuses_path)
@@ -44,9 +51,14 @@ class Indexer(ABC):
         self.df_labels_dict = {k: v for k, v in self.df_labels_dict.items() if k in labels}
         print(f"Final shape: {len(self.df_labels_dict)}")
 
-    @abstractmethod
-    def __clusterize__(self) -> Dict[str, str]:
-        raise NotImplementedError
+    def __clusterize__(self, type: ClusteringType = ClusteringType.cie10) -> Dict[str, str]:
+        if type == ClusteringType.first_letter:
+            mappings = {label: label[0] for label in self.df_labels_dict.keys()}
+        elif type == ClusteringType.cie10:
+            clusters_assigned = cluster_assigner(self.df_labels_dict.keys())
+            mappings = dict(zip(self.df_labels_dict.keys(), clusters_assigned))
+        print(mappings)
+        return mappings
 
     def __create_corpus__(self):
         for split_type in ["train", "test", "dev"]:
@@ -107,13 +119,3 @@ class Indexer(ABC):
         print(dict(zip(unique, counts)))
         print(f"Mean: {np.mean(counts)}")
         print(f"Std: {np.std(counts)}")
-
-
-class IndexerWithGivenCluster(Indexer):
-    def __clusterize__(self) -> Dict[str, str]:
-        mappings = {
-            label: cluster
-            for label, cluster in zip(self.df_labels["label"].to_list(), self.df_labels["cluster"].to_list())
-            if label in self.df_labels_dict
-        }
-        return mappings
