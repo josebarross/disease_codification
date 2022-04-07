@@ -28,6 +28,7 @@ class Indexer(ABC):
         create_dir_if_dont_exist(self.indexer_path / "matcher")
         create_dir_if_dont_exist(self.indexer_path / "ranker")
         create_dir_if_dont_exist(self.indexer_path / "descriptions")
+        create_dir_if_dont_exist(self.indexer_path / "incorrect-matcher")
 
     def create_corpuses(self):
         self.__filter_labels_only_in_dataset__()
@@ -41,7 +42,7 @@ class Indexer(ABC):
 
     def __filter_labels_only_in_dataset__(self):
         print(f"Original shape: {len(self.df_labels_dict)}")
-        labels = set(itertools.chain.from_iterable([label for label in self.df_sentences["labels"].values]))
+        labels = set(itertools.chain.from_iterable([ls for ls in self.df_sentences["labels"].to_list()]))
         self.df_labels_dict = {k: v for k, v in self.df_labels_dict.items() if k in labels}
         print(f"Final shape: {len(self.df_labels_dict)}")
 
@@ -53,31 +54,17 @@ class Indexer(ABC):
         for split_type in ["train", "test", "dev"]:
             df_split_type = self.df_sentences[self.df_sentences["split_type"] == split_type]
             sentences = df_split_type["sentence"].tolist()
-            labels = [labels for labels in df_split_type["labels"].values]
+            labels = [ls for ls in df_split_type["labels"].to_list()]
             if split_type == "train":
                 sentences += list(self.df_labels_dict.values())
                 labels += [[label] for label in self.df_labels_dict.keys()]
             write_fasttext_file(sentences, labels, self.indexer_path / "corpus" / f"corpus_{split_type}.txt")
 
-    def __create_descriptions_corpus__(self, matcher_descriptions: bool):
-        for split_type in ["train", "dev"]:
-            sentences = []
-            labels = []
-            for _, row in self.df_labels.iterrows():
-                if row["split_type"] == split_type and row["spanish_description"]:
-                    sentences.append(row["spanish_description"])
-                    labels.append(
-                        [row["label"]] if not matcher_descriptions else [self.mappings_label_to_cluster[row["label"]]]
-                    )
-            write_fasttext_file(
-                sentences, labels, self.indexer_path / "descriptions" / f"descriptions_{split_type}.txt"
-            )
-
     def __create_matcher_corpus__(self):
         for split_type in ["train", "test", "dev"]:
             df_split_type = self.df_sentences[self.df_sentences["split_type"] == split_type]
             sentences = df_split_type["sentence"].tolist()
-            labels = [self.__labels_to_clusters__(labels) for labels in df_split_type["labels"].values]
+            labels = [self.__labels_to_clusters__(ls) for ls in df_split_type["labels"].to_list()]
             if split_type == "train":
                 sentences += list(self.df_labels_dict.values())
                 labels += [[self.mappings_label_to_cluster[label]] for label in self.df_labels_dict.keys()]
@@ -88,32 +75,32 @@ class Indexer(ABC):
         for cluster in self.clusters:
             is_in_cluster = self.df_sentences["clusters"].apply(partial(self.__is_in_cluster__, cluster))
             df_cluster = self.df_sentences[is_in_cluster]
-            df_cluster_descriptions = {
-                label: description
-                for label, description in self.df_labels_dict.items()
-                if self.mappings_label_to_cluster[label] == cluster
-            }
             for split_type in ["train", "test", "dev"]:
                 df_split_type = df_cluster[df_cluster["split_type"] == split_type]
                 sentences = df_split_type["sentence"].tolist()
-                labels = [
-                    [l for l in ls if self.__is_in_cluster__(cluster, l)] for ls in df_split_type["labels"].values
-                ]
+                labels = []
+                for ls in df_split_type["labels"].to_list():
+                    labels.append([label for label in ls if self.mappings_label_to_cluster[label] == cluster])
                 if split_type == "train":
+                    df_cluster_descriptions = {
+                        label: description
+                        for label, description in self.df_labels_dict.items()
+                        if self.mappings_label_to_cluster[label] == cluster
+                    }
                     sentences += list(df_cluster_descriptions.values())
                     labels += [[label] for label in df_cluster_descriptions.keys()]
                 write_fasttext_file(
                     sentences, labels, self.indexer_path / "ranker" / f"ranker_{cluster}_{split_type}.txt"
                 )
 
-    def __labels_to_clusters__(self, labels):
-        return list({self.mappings_label_to_cluster[l] for l in labels if self.mappings_label_to_cluster.get(l)})
+    def __labels_to_clusters__(self, ls):
+        return list({self.mappings_label_to_cluster[l] for l in ls})
 
-    def __is_in_cluster__(self, cluster, labels):
-        return cluster in labels
+    def __is_in_cluster__(self, cluster, clusters):
+        return cluster in clusters
 
-    def __is_in_labels__(self, label, labels):
-        return label in labels
+    def __is_in_labels__(self, label, ls):
+        return label in ls
 
     def print_info_of_labels(self):
         clusters = np.array(list(self.mappings_label_to_cluster.values()))
@@ -127,6 +114,8 @@ class Indexer(ABC):
 class IndexerWithGivenCluster(Indexer):
     def __clusterize__(self) -> Dict[str, str]:
         mappings = {
-            label: cluster for label, cluster in zip(self.df_labels["label"].values, self.df_labels["cluster"].values)
+            label: cluster
+            for label, cluster in zip(self.df_labels["label"].to_list(), self.df_labels["cluster"].to_list())
+            if label in self.df_labels_dict
         }
         return mappings
