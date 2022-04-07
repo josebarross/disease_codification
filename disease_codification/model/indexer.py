@@ -2,11 +2,11 @@ from enum import Enum
 import itertools
 from functools import partial
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
 
 import numpy as np
 from disease_codification.custom_io import create_dir_if_dont_exist, save_as_pickle, write_fasttext_file
-from disease_codification.process_dataset.cie10 import cluster_assigner
+from disease_codification.process_dataset.cie10 import cluster_assigner, get_cie10_df
 from disease_codification.process_dataset.mapper import mapper_process_function
 
 
@@ -34,6 +34,7 @@ class Indexer:
         create_dir_if_dont_exist(self.indexer_path / "corpus")
         create_dir_if_dont_exist(self.indexer_path / "matcher")
         create_dir_if_dont_exist(self.indexer_path / "ranker")
+        create_dir_if_dont_exist(self.indexer_path / "description")
 
     def create_corpuses(self):
         self.__filter_labels_only_in_dataset__()
@@ -43,6 +44,7 @@ class Indexer:
         self.__create_corpus__()
         self.__create_matcher_corpus__()
         self.__create_ranker_corpus__()
+        self.__create_description_corpus__()
         self.print_info_of_labels()
 
     def __filter_labels_only_in_dataset__(self):
@@ -65,9 +67,6 @@ class Indexer:
             df_split_type = self.df_sentences[self.df_sentences["split_type"] == split_type]
             sentences = df_split_type["sentence"].tolist()
             labels = [ls for ls in df_split_type["labels"].to_list()]
-            if split_type == "train":
-                sentences += list(self.df_labels_dict.values())
-                labels += [[label] for label in self.df_labels_dict.keys()]
             write_fasttext_file(sentences, labels, self.indexer_path / "corpus" / f"corpus_{split_type}.txt")
 
     def __create_matcher_corpus__(self):
@@ -75,9 +74,6 @@ class Indexer:
             df_split_type = self.df_sentences[self.df_sentences["split_type"] == split_type]
             sentences = df_split_type["sentence"].tolist()
             labels = [self.__labels_to_clusters__(ls) for ls in df_split_type["labels"].to_list()]
-            if split_type == "train":
-                sentences += list(self.df_labels_dict.values())
-                labels += [[self.mappings_label_to_cluster[label]] for label in self.df_labels_dict.keys()]
             write_fasttext_file(sentences, labels, self.indexer_path / "matcher" / f"matcher_{split_type}.txt")
 
     def __create_ranker_corpus__(self):
@@ -91,14 +87,6 @@ class Indexer:
                 labels = []
                 for ls in df_split_type["labels"].to_list():
                     labels.append([label for label in ls if self.mappings_label_to_cluster[label] == cluster])
-                if split_type == "train":
-                    df_cluster_descriptions = {
-                        label: description
-                        for label, description in self.df_labels_dict.items()
-                        if self.mappings_label_to_cluster[label] == cluster
-                    }
-                    sentences += list(df_cluster_descriptions.values())
-                    labels += [[label] for label in df_cluster_descriptions.keys()]
                 write_fasttext_file(
                     sentences, labels, self.indexer_path / "ranker" / f"ranker_{cluster}_{split_type}.txt"
                 )
@@ -119,3 +107,69 @@ class Indexer:
         print(dict(zip(unique, counts)))
         print(f"Mean: {np.mean(counts)}")
         print(f"Std: {np.std(counts)}")
+
+    def __create_description_corpus__(self):
+        sentences_codi, labels_codi = self._from_codiesp_descriptions()
+        sentences_cie, labels_cie = self._from_cie10_descriptions()
+        sentences, labels = sentences_codi + sentences_cie, labels_codi + labels_cie
+        labels_matcher = [self.__labels_to_clusters__(ls) for ls in labels]
+        write_fasttext_file(sentences, labels, self.indexer_path / "description" / "corpus_train.txt")
+        write_fasttext_file(sentences, labels_matcher, self.indexer_path / "description" / "matcher_train.txt")
+        for cluster in self.clusters:
+            sentences_cluster = []
+            labels_cluster = []
+            for sentence, ls in zip(sentences, labels):
+                ls = [l for l in ls if self.mappings_label_to_cluster[l] == cluster]
+                if ls:
+                    sentences_cluster.append(sentence)
+                    labels_cluster.append(ls)
+            write_fasttext_file(
+                sentences_cluster, labels_cluster, self.indexer_path / "description" / f"ranker_{cluster}_train.txt"
+            )
+
+    def _from_codiesp_descriptions(self):
+        sentences = []
+        labels = []
+        for label, sentence in self.df_labels_dict.items():
+            if sentence != "Sin descripcion":
+                sentences.append(sentence)
+                labels.append([label])
+        return sentences, labels
+
+    def _from_cie10_descriptions(self):
+        all_labels = self.mappings_label_to_cluster.keys()
+        cie10_df = get_cie10_df(self.corpuses_path)
+        sentences = []
+        labels = []
+        for _, row in cie10_df.iterrows():
+            code = row["code"]
+            if len(code.split("-")) == 2:
+                start = code.split("-")[0]
+                end = code.split("-")[1]
+                ls = self._determine_labels_in_range(start, end, all_labels)
+            else:
+                ls = self._determine_labels_startswith(code, all_labels)
+            if ls:
+                sentences.append(row["description"])
+                labels.append(ls)
+        return sentences, labels
+
+    def _determine_labels_startswith(self, code: str, all_labels: List[str]):
+        return [label for label in all_labels if label.startswith(code.lower())]
+
+    def _determine_labels_in_range(self, start: str, end: str, all_labels: List[str]):
+        start_cat = start[0].lower()
+        end_cat = end[0].lower()
+        starts_int = start[1:3] if not start[1:3] == "01" else "00"
+        ends_int = end[1:3]
+        labels_in_range = []
+        for label in all_labels:
+            label_int = label[1:3]
+            label_in_range = (
+                (start_cat == end_cat and label.startswith(start_cat) and starts_int <= label_int <= ends_int)
+                or (label.startswith(start_cat) and label_int >= starts_int)
+                or (label.startswith(end_cat) and label_int <= ends_int)
+            )
+            if label_in_range:
+                labels_in_range.append(label)
+        return labels_in_range

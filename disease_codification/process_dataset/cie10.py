@@ -1,4 +1,7 @@
+from pathlib import Path
 from typing import List
+
+import pandas as pd
 
 clusters = {
     "a00-b99": "Ciertas enfermedades infecciosas y parasitarias",
@@ -23,6 +26,11 @@ clusters = {
     "v00-y99": "Causas externas de morbilidad y de mortalidad",
     "z00-z99": "Factores que influyen en el estado de salud y contacto con los servicios de salud",
 }
+
+
+def get_cie10_df(corpuses_path: Path):
+    df = pd.read_csv(corpuses_path / "cie-10.csv", sep=",")
+    return df
 
 
 def cluster_assigner(labels: List[str]):

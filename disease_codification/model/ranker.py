@@ -7,7 +7,7 @@ from typing import List
 from disease_codification.custom_io import create_dir_if_dont_exist, load_pickle, save_as_pickle
 
 from disease_codification.flair_utils import read_corpus
-from flair.data import Sentence
+from flair.data import Sentence, MultiCorpus
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import average_precision_score
 from sklearn.multiclass import OneVsRestClassifier
@@ -56,15 +56,18 @@ class Ranker:
     def _read_sentences(self, cluster: str, split_types: List[str]) -> List[Sentence]:
         filename = f"ranker_{cluster}"
         corpus = read_corpus(self.indexers_path / self.indexer / "ranker", filename)
-        sentences = []
-        for split_type in split_types:
-            sentences += list(getattr(corpus, split_type))
+        corpus_descriptions = read_corpus(self.indexers_path / self.indexer / "description", filename, only_train=True)
+        corpuses = [corpus, corpus_descriptions]
         incorrect_matcher_path = (
             self.models_path / self.indexer / "incorrect-matcher" / f"incorrect_{cluster}_train.txt"
         )
-        if incorrect_matcher_path.exists() and "train" in split_types:
+        if incorrect_matcher_path.exists():
             incorrect_matcher_corpus = read_corpus(incorrect_matcher_path, only_train=True)
-            sentences += list(incorrect_matcher_corpus.train)
+            corpuses.append(incorrect_matcher_corpus)
+        multi_corpus = MultiCorpus(corpuses)
+        sentences = []
+        for split_type in split_types:
+            sentences += list(getattr(multi_corpus, split_type))
         return sentences
 
     def _set_multi_label_binarizer(self, cluster, sentences):
