@@ -21,15 +21,15 @@ from disease_codification.model.matcher import Matcher
 
 class Ranker:
     def __init__(
-        self, indexers_path: Path, models_path: Path, indexer: str, cluster_classifier={}, cluster_label_classifier={}
+        self, indexers_path: Path, models_path: Path, indexer: str, cluster_classifier={}, cluster_label_binarizer={}
     ):
         self.indexers_path = indexers_path
         self.models_path = models_path
         self.indexer = indexer
-        self.clusters = {filename.split("_")[1] for filename in os.listdir(indexers_path / indexer / "ranker")}
         self.cluster_classifier = cluster_classifier
-        self.cluster_label_binarizer = cluster_label_classifier
+        self.cluster_label_binarizer = cluster_label_binarizer
         self.mappings = load_pickle(self.indexers_path / self.indexer / "mappings.pickle")
+        self.clusters = set(self.mappings.values())
         Ranker.create_directories(models_path, indexer)
 
     @classmethod
@@ -38,7 +38,7 @@ class Ranker:
         create_dir_if_dont_exist(models_path / indexer / "ranker")
 
     @classmethod
-    def load(cls, indexers_path: Path, models_path: Path, indexer: str, load_from_gcp: bool = True):
+    def load(cls, indexers_path: Path, models_path: Path, indexer: str, load_from_gcp: bool = False):
         cls.create_directories(models_path, indexer)
         clusters = set(load_pickle(indexers_path / indexer / "mappings.pickle").values())
         cluster_classifier = {}
