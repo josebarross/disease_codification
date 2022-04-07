@@ -1,6 +1,8 @@
 import shutil
 from pathlib import Path
+from typing import List
 
+from flair.data import Corpus, ConcatDataset
 from flair.datasets import ClassificationCorpus
 from flair.embeddings import TransformerDocumentEmbeddings
 from flair.models import TextClassifier
@@ -11,7 +13,9 @@ from disease_codification.gcp import download_blob_file
 
 def read_corpus(data_folder: Path, filename: str, only_train: bool = False):
     if only_train:
-        return ClassificationCorpus(data_folder, train_file=f"{filename}_train.txt", label_type="gold")
+        return ClassificationCorpus(
+            data_folder, train_file=f"{filename}_train.txt", label_type="gold", sample_missing_splits=False
+        )
     return ClassificationCorpus(
         data_folder,
         test_file=f"{filename}_test.txt",
@@ -65,3 +69,37 @@ def fetch_model(filename_gcp: str, filename_out: Path):
 
 def get_label_value(label):
     return label.value.replace("<", "").replace(">", "")
+
+
+class CustomMultiCorpus(Corpus):
+    def __init__(self, corpora: List[Corpus], name: str = "multicorpus", **corpusargs):
+        self.corpora: List[Corpus] = corpora
+
+        train_parts = []
+        dev_parts = []
+        test_parts = []
+        for corpus in self.corpora:
+            if corpus.train:
+                train_parts.append(corpus.train)
+            if corpus.dev:
+                dev_parts.append(corpus.dev)
+            if corpus.test:
+                test_parts.append(corpus.test)
+
+        super(CustomMultiCorpus, self).__init__(
+            ConcatDataset(train_parts) if len(train_parts) > 0 else None,
+            ConcatDataset(dev_parts) if len(dev_parts) > 0 else None,
+            ConcatDataset(test_parts) if len(test_parts) > 0 else None,
+            name=name,
+            **corpusargs,
+        )
+
+    def __str__(self):
+        output = (
+            f"MultiCorpus: "
+            f"{len(self.train) if self.train else 0} train + "
+            f"{len(self.dev) if self.dev else 0} dev + "
+            f"{len(self.test) if self.test else 0} test sentences\n - "
+        )
+        output += "\n - ".join([f"{type(corpus).__name__} {str(corpus)} - {corpus.name}" for corpus in self.corpora])
+        return output

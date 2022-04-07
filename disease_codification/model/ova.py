@@ -4,7 +4,7 @@ from typing import List
 from disease_codification.custom_io import create_dir_if_dont_exist, load_pickle, save_as_pickle
 from disease_codification.flair_utils import read_corpus
 from disease_codification.gcp import download_blob_file, upload_blob_file
-from flair.data import Sentence
+from flair.data import Sentence, MultiCorpus
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.pipeline import Pipeline
@@ -69,9 +69,11 @@ class OVA:
     def train(self, upload_to_gcp: bool = False, split_types_train=["train", "dev"]):
         print(f"Training OVA")
         corpus = read_corpus(self.indexers_path / self.indexer / "corpus", "corpus")
+        corpus_descriptions = read_corpus(self.indexers_path / self.indexer / "description", "corpus", only_train=True)
+        multi_corpus = MultiCorpus([corpus, corpus_descriptions])
         sentences = []
         for split_type in split_types_train:
-            sentences += list(getattr(corpus, split_type))
+            sentences += list(getattr(multi_corpus, split_type))
         embeddings = self._get_embeddings(sentences)
         self._set_multi_label_binarizer()
         labels = self._get_labels_matrix(sentences)

@@ -3,10 +3,14 @@ from pathlib import Path
 
 import numpy as np
 from disease_codification.custom_io import create_dir_if_dont_exist, load_pickle, write_fasttext_file
-from disease_codification.flair_utils import get_label_value, read_corpus, train_transformer_classifier
+from disease_codification.flair_utils import (
+    CustomMultiCorpus,
+    get_label_value,
+    read_corpus,
+    train_transformer_classifier,
+)
 from disease_codification.gcp import download_blob_file, upload_blob_file
 from flair.models import TextClassifier
-from flair.data import MultiCorpus
 from sklearn.metrics import average_precision_score
 
 from disease_codification.metrics import calculate_mean_average_precision
@@ -48,7 +52,7 @@ class Matcher:
         print(f"Finetuning for {self.indexer}")
         corpus = read_corpus(self.indexers_path / self.indexer / "matcher", "matcher")
         corpus_descriptions = read_corpus(self.indexers_path / self.indexer / "description", "matcher", only_train=True)
-        multi_corpus = MultiCorpus([corpus, corpus_descriptions])
+        multi_corpus = CustomMultiCorpus([corpus, corpus_descriptions])
         filepath = f"{self.indexer}/matcher"
         self.classifier = train_transformer_classifier(
             self.classifier, multi_corpus, self.models_path / filepath, **training_params
