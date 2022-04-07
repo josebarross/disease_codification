@@ -1,4 +1,5 @@
 from email.mime import base
+from json import load
 import os
 import statistics
 from pathlib import Path
@@ -15,10 +16,7 @@ from sklearn.preprocessing import MultiLabelBinarizer
 from xgboost import XGBClassifier
 
 from disease_codification.gcp import download_blob_file, upload_blob_file, storage_client
-
-
-def get_cluster(blob):
-    return blob.name.split("/")[-1].split("_")[-1].split(".")[0]
+from disease_codification.model.matcher import Matcher
 
 
 class Ranker:
@@ -31,6 +29,7 @@ class Ranker:
         self.clusters = {filename.split("_")[1] for filename in os.listdir(indexers_path / indexer / "ranker")}
         self.cluster_classifier = cluster_classifier
         self.cluster_label_binarizer = cluster_label_classifier
+        self.mappings = load_pickle(self.indexers_path / self.indexer / "mappings.pickle")
         Ranker.create_directories(models_path, indexer)
 
     @classmethod
@@ -41,12 +40,7 @@ class Ranker:
     @classmethod
     def load(cls, indexers_path: Path, models_path: Path, indexer: str, load_from_gcp: bool = True):
         cls.create_directories(models_path, indexer)
-        if load_from_gcp:
-            blobs = storage_client.list_blobs(os.getenv("BUCKET"))
-            clusters = {get_cluster(blob) for blob in blobs if "matcher" not in blob.name}
-        else:
-            clusters = {filename.split("_")[1] for filename in os.listdir(indexers_path / indexer / "ranker")}
-
+        clusters = set(load_pickle(indexers_path / indexer / "mappings.pickle").values())
         cluster_classifier = {}
         cluster_label_binarizer = {}
         for cluster in clusters:
@@ -65,11 +59,20 @@ class Ranker:
         sentences = []
         for split_type in split_types:
             sentences += list(getattr(corpus, split_type))
+        has_incorrect = (
+            self.indexers_path / self.indexer / "incorrect-matcher" / f"incorrect_{cluster}_train.txt"
+        ).exists()
+        if has_incorrect and "train" in ["train"]:
+            incorrect_matcher_corpus = read_corpus(
+                self.indexers_path / self.indexer / "incorrect-matcher", f"incorrect_{cluster}", only_train=True
+            )
+            sentences += list(incorrect_matcher_corpus.train)
         return sentences
 
     def _set_multi_label_binarizer(self, cluster, sentences):
         mlb = MultiLabelBinarizer()
-        mlb.fit_transform([[label.value for label in s.get_labels("gold")] for s in sentences])
+        labels_cluster = {f"<{label}>" for label, cluster_label in self.mappings.items() if cluster_label == cluster}
+        mlb.fit([list(labels_cluster) + ["<incorrect-matcher>"]])
         self.cluster_label_binarizer[cluster] = mlb
 
     def _get_labels_matrix(self, cluster, sentences):
@@ -94,7 +97,20 @@ class Ranker:
             clf = OneVsRestClassifier(pipe).fit(embeddings, labels)
             self.cluster_classifier[cluster] = clf
         print("Training Complete")
-        self.save(upload_to_gcp)
+        self.save()
+        if upload_to_gcp:
+            self.upload_to_gcp()
+
+    def predict(self, sentences):
+        print("Predicting ranker")
+        for cluster in self.clusters:
+            print(cluster)
+            embeddings = self._get_embeddings(sentences)
+            predictions = self.cluster_classifier[cluster].predict_proba(embeddings)
+            classes = self.cluster_label_binarizer[cluster].classes_
+            for sentence, prediction in zip(sentences, predictions):
+                for i, label in enumerate(classes):
+                    sentence.add_label("ranker", label, prediction[i])
 
     def eval_weighted(self, split_types: List[str] = ["dev", "test"]):
         print(f"Calculating MAP Weighted for {split_types}")
@@ -115,17 +131,20 @@ class Ranker:
             print(map_clusters)
             print(weighted_map)
 
-    def save(self, upload_to_gcp: bool = True):
+    def save(self):
         print("Saving model")
         base_path = self.models_path / self.indexer / "ranker"
         for cluster in self.clusters:
             save_as_pickle(self.cluster_label_binarizer[cluster], base_path / f"label_binarizer_{cluster}.pickle")
             save_as_pickle(self.cluster_classifier[cluster], base_path / f"classifier_{cluster}.pickle")
-            if upload_to_gcp:
-                upload_blob_file(
-                    base_path / f"label_binarizer_{cluster}.pickle",
-                    f"{self.indexer}/ranker/label_binarizer_{cluster}.pickle",
-                )
-                upload_blob_file(
-                    base_path / f"classifier_{cluster}.pickle", f"{self.indexer}/ranker/classifier_{cluster}.pickle"
-                )
+
+    def upload_to_gcp(self):
+        base_path = self.models_path / self.indexer / "ranker"
+        for cluster in self.clusters:
+            upload_blob_file(
+                base_path / f"label_binarizer_{cluster}.pickle",
+                f"{self.indexer}/ranker/label_binarizer_{cluster}.pickle",
+            )
+            upload_blob_file(
+                base_path / f"classifier_{cluster}.pickle", f"{self.indexer}/ranker/classifier_{cluster}.pickle"
+            )
