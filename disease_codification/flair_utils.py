@@ -9,15 +9,16 @@ from disease_codification.custom_io import create_dir_if_dont_exist
 from disease_codification.gcp import download_blob_file
 
 
-def read_corpus(data_folder: Path, filename: str):
-    corpus = ClassificationCorpus(
+def read_corpus(data_folder: Path, filename: str, only_train: bool = False):
+    if only_train:
+        return ClassificationCorpus(data_folder, train_file=f"{filename}_train.txt", label_type="gold")
+    return ClassificationCorpus(
         data_folder,
         test_file=f"{filename}_test.txt",
         dev_file=f"{filename}_dev.txt",
         train_file=f"{filename}_train.txt",
         label_type="gold",
     )
-    return corpus
 
 
 def train_transformer_classifier(
@@ -60,3 +61,7 @@ def train_transformer_classifier(
 def fetch_model(filename_gcp: str, filename_out: Path):
     download_blob_file(filename_gcp, filename_out)
     return TextClassifier.load(filename_out)
+
+
+def get_label_value(label):
+    return label.value.replace("<", "").replace(">", "")
