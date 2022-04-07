@@ -27,8 +27,6 @@ class Indexer(ABC):
         create_dir_if_dont_exist(self.indexer_path / "corpus")
         create_dir_if_dont_exist(self.indexer_path / "matcher")
         create_dir_if_dont_exist(self.indexer_path / "ranker")
-        create_dir_if_dont_exist(self.indexer_path / "descriptions")
-        create_dir_if_dont_exist(self.indexer_path / "incorrect-matcher")
 
     def create_corpuses(self):
         self.__filter_labels_only_in_dataset__()

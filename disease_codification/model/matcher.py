@@ -27,7 +27,7 @@ class Matcher:
     def create_directories(cls, models_path, indexer):
         create_dir_if_dont_exist(models_path / indexer)
         create_dir_if_dont_exist(models_path / indexer / "matcher")
-        create_dir_if_dont_exist(models_path / indexer / "matcher-dev")
+        create_dir_if_dont_exist(models_path / indexer / "incorrect-matcher")
 
     @classmethod
     def load(cls, indexers_path, models_path, indexer, load_from_gcp: bool = True):
@@ -95,5 +95,5 @@ class Matcher:
             write_fasttext_file(
                 sentences_incorrect[cluster],
                 [["incorrect-matcher"]] * len(sentences_incorrect[cluster]),
-                self.indexers_path / self.indexer / "incorrect-matcher" / f"incorrect_{cluster}_train.txt",
+                self.models_path / self.indexer / "incorrect-matcher" / f"incorrect_{cluster}_train.txt",
             )

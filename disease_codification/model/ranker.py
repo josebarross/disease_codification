@@ -59,13 +59,11 @@ class Ranker:
         sentences = []
         for split_type in split_types:
             sentences += list(getattr(corpus, split_type))
-        has_incorrect = (
-            self.indexers_path / self.indexer / "incorrect-matcher" / f"incorrect_{cluster}_train.txt"
-        ).exists()
-        if has_incorrect and "train" in split_types:
-            incorrect_matcher_corpus = read_corpus(
-                self.indexers_path / self.indexer / "incorrect-matcher", f"incorrect_{cluster}", only_train=True
-            )
+        incorrect_matcher_path = (
+            self.models_path / self.indexer / "incorrect-matcher" / f"incorrect_{cluster}_train.txt"
+        )
+        if incorrect_matcher_path.exists() and "train" in split_types:
+            incorrect_matcher_corpus = read_corpus(incorrect_matcher_path, only_train=True)
             sentences += list(incorrect_matcher_corpus.train)
         return sentences
 
