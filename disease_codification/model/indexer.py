@@ -111,14 +111,20 @@ class Indexer:
     def __create_description_corpus__(self):
         sentences_codi, labels_codi = self._from_codiesp_descriptions()
         sentences_cie, labels_cie = self._from_cie10_descriptions()
-        sentences, labels = sentences_codi + sentences_cie, labels_codi + labels_cie
-        labels_matcher = [self.__labels_to_clusters__(ls) for ls in labels]
-        write_fasttext_file(sentences, labels, self.indexer_path / "description" / "corpus_train.txt")
-        write_fasttext_file(sentences, labels_matcher, self.indexer_path / "description" / "matcher_train.txt")
+        write_fasttext_file(
+            sentences_codi + sentences_cie,
+            labels_codi + labels_cie,
+            self.indexer_path / "description" / "corpus_train.txt",
+        )
+        write_fasttext_file(
+            sentences_codi + sentences_cie,
+            [self.__labels_to_clusters__(ls) for ls in labels_codi + labels_cie],
+            self.indexer_path / "description" / "matcher_train.txt",
+        )
         for cluster in self.clusters:
             sentences_cluster = []
             labels_cluster = []
-            for sentence, ls in zip(sentences, labels):
+            for sentence, ls in zip(sentences_codi, labels_codi):
                 ls = [l for l in ls if self.mappings_label_to_cluster[l] == cluster]
                 if ls:
                     sentences_cluster.append(sentence)
