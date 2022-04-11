@@ -35,7 +35,7 @@ def train_transformer_classifier(
     downsample: int = 0.0,
     train_with_dev: bool = False,
     layers="-1",
-    transformer_name="dccuchile/bert-base-spanish-wwm-cased",
+    transformer_name="PlanTL-GOB-ES/roberta-base-biomedical-es",
     label_type="gold",
 ):
     create_dir_if_dont_exist(results_path)
