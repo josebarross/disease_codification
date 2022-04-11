@@ -39,10 +39,14 @@ class XOVA:
         upload_matcher_to_gcp: bool = False,
         upload_ranker_to_gcp: bool = False,
         split_types_train_ranker: List[str] = ["train", "dev"],
+        train_matcher=True,
+        train_ranker=True,
     ):
-        self.matcher.train(training_params=matcher_training_params, upload_to_gcp=upload_matcher_to_gcp)
+        if train_matcher:
+            self.matcher.train(training_params=matcher_training_params, upload_to_gcp=upload_matcher_to_gcp)
         self.matcher.create_corpus_of_incorrectly_predicted()
-        self.ranker.train(upload_to_gcp=upload_ranker_to_gcp, split_types_train=split_types_train_ranker)
+        if train_ranker:
+            self.ranker.train(upload_to_gcp=upload_ranker_to_gcp, split_types_train=split_types_train_ranker)
 
     def upload_to_gcp(self):
         self.matcher.upload_to_gcp()
