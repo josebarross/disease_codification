@@ -116,6 +116,7 @@ class Ranker:
     def _get_embeddings(self, cluster: str, sentences: List[Sentence]):
         embeddings = self.cluster_tfidf[cluster].transform(s.to_original_text() for s in sentences)
         if self.transformer_for_embedding:
+            self.transformer_for_embedding.model.eval()
             self.transformer_for_embedding.embed(sentences)
             transformer_embeddings = np.array([sentence.embedding.to("cpu").numpy() for sentence in sentences])
             embeddings = np.hstack((embeddings.toarray(), transformer_embeddings))
