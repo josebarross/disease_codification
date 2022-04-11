@@ -1,6 +1,5 @@
 from pathlib import Path
 from typing import List
-from flair.models import TextClassifier
 from disease_codification.custom_io import load_pickle
 from disease_codification.flair_utils import get_label_value, read_corpus
 from disease_codification.metrics import calculate_mean_average_precision

@@ -14,6 +14,7 @@ from sklearn.preprocessing import MultiLabelBinarizer
 from xgboost import XGBClassifier
 
 from disease_codification.gcp import download_blob_file, upload_blob_file
+from disease_codification.utils import chunks
 
 
 class Ranker:
@@ -117,9 +118,13 @@ class Ranker:
         embeddings = self.cluster_tfidf[cluster].transform(s.to_original_text() for s in sentences)
         if self.transformer_for_embedding:
             self.transformer_for_embedding.model.eval()
-            self.transformer_for_embedding.embed(sentences)
+            for chunk in chunks(sentences):
+                self.transformer_for_embedding.embed(chunk)
+                for sentence in chunk:
+                    sentence.embedding.to("cpu")
             transformer_embeddings = np.array([sentence.embedding.to("cpu").numpy() for sentence in sentences])
             embeddings = np.hstack((embeddings.toarray(), transformer_embeddings))
+        print("Got embeddings")
         return embeddings
 
     def train(self, upload_to_gcp: bool = False, split_types_train: List[str] = ["train", "dev"]):
