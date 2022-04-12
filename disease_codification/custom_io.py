@@ -22,7 +22,7 @@ def write_fasttext_file(sentences: List[str], labels: List[List[str]], filepath:
             continue
         if not text:
             continue
-        lines.append(f"{' '.join(f'__label__<{label}>' for label in list_of_labels)} <{text}>")
+        lines.append(f"{' '.join(f'__label__<{label}>' for label in set(list_of_labels))} <{text}>")
     with open(filepath, "w") as file:
         file.write("\n".join(lines))
 
