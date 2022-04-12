@@ -14,6 +14,7 @@ from sklearn.preprocessing import MultiLabelBinarizer
 from xgboost import XGBClassifier
 
 from disease_codification.gcp import download_blob_file, upload_blob_file
+from disease_codification.process_dataset.mapper import NERAugmentation
 from disease_codification.utils import chunks
 
 
@@ -26,9 +27,14 @@ class Ranker:
         cluster_classifier={},
         cluster_label_binarizer={},
         cluster_tfidf: Dict[str, TfidfVectorizer] = {},
-        transformer_for_embedding: str = "PlanTL-GOB-ES/roberta-base-biomedical-es",
+        transformer_for_embedding: str = None,
         use_incorrect_matcher_predictions: bool = False,
         subset: int = 0,
+        augmentation: List[Augmentation] = [
+            NERAugmentation.mention,
+            NERAugmentation.sentence,
+            NERAugmentation.stripped,
+        ],
     ):
         self.indexers_path: Path = indexers_path
         self.models_path: Path = models_path
@@ -45,6 +51,7 @@ class Ranker:
         )
         self.subset = subset
         self.use_incorrect_matcher_predictions = use_incorrect_matcher_predictions
+        self.ner_augmentation = ner_augmentation
         Ranker.create_directories(models_path, indexer)
 
     @classmethod
@@ -84,12 +91,13 @@ class Ranker:
         corpus = read_corpus(self.indexers_path / self.indexer / "ranker", filename)
         corpus_descriptions = read_corpus(self.indexers_path / self.indexer / "description", filename, only_train=True)
         corpuses = [corpus, corpus_descriptions]
-        incorrect_matcher_path = (
-            self.models_path / self.indexer / "incorrect-matcher" / f"incorrect_{cluster}_train.txt"
-        )
+        incorrect_matcher_path = self.models_path / self.indexer / "incorrect-matcher"
         if self.use_incorrect_matcher_predictions and incorrect_matcher_path.exists():
-            incorrect_matcher_corpus = read_corpus(incorrect_matcher_path, only_train=True)
+            incorrect_matcher_corpus = read_corpus(incorrect_matcher_path, f"incorrect_{cluster}", only_train=True)
             corpuses.append(incorrect_matcher_corpus)
+        for aug in self.ner_augmentation:
+            ner_aug = read_corpus(self.indexers_path / self.indexer / str(aug), f"ranker_{cluster}", only_train=True)
+            corpuses.append(ner_aug)
         multi_corpus = MultiCorpus(corpuses)
         sentences = []
         for split_type in split_types:

@@ -7,7 +7,7 @@ from typing import Dict, List
 import numpy as np
 from disease_codification.custom_io import create_dir_if_dont_exist, save_as_pickle, write_fasttext_file
 from disease_codification.process_dataset.cie10 import cluster_assigner, get_cie10_df
-from disease_codification.process_dataset.mapper import mapper_process_function
+from disease_codification.process_dataset.mapper import mapper_process_function, NERAugmentation
 
 
 class ClusteringType(Enum):
@@ -17,17 +17,28 @@ class ClusteringType(Enum):
 
 class Indexer:
     def __init__(
-        self, corpus: str, corpuses_path: Path, indexers_path: Path, args_for_clustering: dict = {}, subset: int = None
+        self,
+        corpus: str,
+        corpuses_path: Path,
+        indexers_path: Path,
+        clustering_type: ClusteringType = ClusteringType.cie10,
+        ner_augmentation: List[NERAugmentation] = [
+            NERAugmentation.sentence,
+            NERAugmentation.stripped,
+            NERAugmentation.mention,
+        ],
+        subset: int = None,
     ):
         self.corpus = corpus
         self.corpuses_path = corpuses_path
         self.indexer_path = indexers_path / corpus
-        self.args_for_clustering = args_for_clustering
-        self.df_sentences, self.df_labels = mapper_process_function[corpus](corpuses_path)
+        self.clustering_type = clustering_type
+        self.ner_augmentation = ner_augmentation
+        self.df_sentences, self.df_labels = mapper_process_function[corpus]["sentence"](corpuses_path)
         self.df_labels_dict = dict(zip(self.df_labels["label"], self.df_labels["spanish_description"]))
+        self.__create_paths__()
         if subset:
             self.df_sentences = self.df_sentences[:subset]
-        self.__create_paths__()
 
     def __create_paths__(self):
         create_dir_if_dont_exist(self.indexer_path)
@@ -35,6 +46,8 @@ class Indexer:
         create_dir_if_dont_exist(self.indexer_path / "matcher")
         create_dir_if_dont_exist(self.indexer_path / "ranker")
         create_dir_if_dont_exist(self.indexer_path / "description")
+        for aug in self.ner_augmentation:
+            create_dir_if_dont_exist(self.indexer_path / str(aug))
 
     def create_corpuses(self):
         self.__filter_labels_only_in_dataset__()
@@ -45,6 +58,7 @@ class Indexer:
         self.__create_matcher_corpus__()
         self.__create_ranker_corpus__()
         self.__create_description_corpus__()
+        self.__create_ner_augmentation_corpus__()
         self.print_info_of_labels()
 
     def __filter_labels_only_in_dataset__(self):
@@ -53,13 +67,12 @@ class Indexer:
         self.df_labels_dict = {k: v for k, v in self.df_labels_dict.items() if k in labels}
         print(f"Final shape: {len(self.df_labels_dict)}")
 
-    def __clusterize__(self, type: ClusteringType = ClusteringType.cie10) -> Dict[str, str]:
-        if type == ClusteringType.first_letter:
+    def __clusterize__(self) -> Dict[str, str]:
+        if self.clustering_type == ClusteringType.first_letter:
             mappings = {label: label[0] for label in self.df_labels_dict.keys()}
-        elif type == ClusteringType.cie10:
+        elif self.clustering_type == ClusteringType.cie10:
             clusters_assigned = cluster_assigner(self.df_labels_dict.keys())
             mappings = dict(zip(self.df_labels_dict.keys(), clusters_assigned))
-        print(mappings)
         return mappings
 
     def __create_corpus__(self):
@@ -92,7 +105,11 @@ class Indexer:
                 )
 
     def __labels_to_clusters__(self, ls):
-        return list({self.mappings_label_to_cluster[l] for l in ls})
+        try:
+            return list({self.mappings_label_to_cluster[l] for l in ls})
+        except KeyError:
+            print(ls)
+            raise
 
     def __is_in_cluster__(self, cluster, clusters):
         return cluster in clusters
@@ -179,3 +196,24 @@ class Indexer:
             if label_in_range:
                 labels_in_range.append(label)
         return labels_in_range
+
+    def __create_ner_augmentation_corpus__(self):
+        for aug in self.ner_augmentation:
+            print(aug)
+            df = mapper_process_function[self.corpus][aug](self.corpuses_path)
+            for cluster in self.clusters:
+                cluster_sentences = [
+                    sentence
+                    for sentence, ls in zip(df["sentence"].to_list(), df["labels"].to_list())
+                    if self.__is_in_cluster__(cluster, self.__labels_to_clusters__(ls))
+                ]
+                cluster_labels = [
+                    [l for l in ls if self.__is_in_cluster__(cluster, self.__labels_to_clusters__([l]))]
+                    for ls in df["labels"].to_list()
+                    if self.__is_in_cluster__(cluster, self.__labels_to_clusters__(ls))
+                ]
+                write_fasttext_file(
+                    cluster_sentences,
+                    cluster_labels,
+                    self.indexer_path / str(aug) / f"ranker_{cluster}_train.txt",
+                )
