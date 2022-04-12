@@ -11,6 +11,7 @@ pip install git+https://your-github-personal-token@github.com/plncmm/disease_cod
 To reproduce results you should run the following code changing the path to one you can use for storing intermediate steps of the process:
 
 ```
+from pathlib import Path
 from disease_codification.reproducibility.codiesp import reproduce_model_codiesp
 reproduce_model_codiesp(Path(".").resolve())
 ```
