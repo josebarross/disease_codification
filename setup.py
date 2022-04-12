@@ -9,7 +9,7 @@ with open("requirements.txt") as f:
 
 setuptools.setup(
     name="disease-codification",
-    version="0.4.0",
+    version="0.4.1",
     author="Jose Barros",
     author_email="jose.barros.s@ug.uchile.cl",
     description="Implements a model for disease codificacion using a Extreme Classification Model",

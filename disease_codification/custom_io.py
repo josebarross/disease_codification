@@ -30,3 +30,4 @@ def write_fasttext_file(sentences: List[str], labels: List[List[str]], filepath:
 def create_dir_if_dont_exist(path: Path):
     if not path.exists():
         os.makedirs(f"{path}/")
+    return path
