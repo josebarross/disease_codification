@@ -29,20 +29,19 @@ def train_transformer_classifier(
     classifier,
     corpus,
     results_path: Path,
-    max_epochs: int = 5,
+    max_epochs: int = 15,
     mini_batch_size: int = 10,
     remove_after_running: bool = False,
     downsample: int = 0.0,
-    train_with_dev: bool = False,
+    train_with_dev: bool = True,
     layers="-1",
     transformer_name="PlanTL-GOB-ES/roberta-base-biomedical-es",
-    label_type="gold",
 ):
     create_dir_if_dont_exist(results_path)
     if downsample:
         corpus = corpus.downsample(downsample)
     if not classifier:
-        label_dict = corpus.make_label_dictionary(label_type=label_type)
+        label_dict = corpus.make_label_dictionary(label_type="gold")
         transformer_embeddings = TransformerDocumentEmbeddings(transformer_name, fine_tune=True, layers=layers)
 
         classifier = TextClassifier(

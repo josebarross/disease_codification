@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import List
 from disease_codification.custom_io import load_pickle
 from disease_codification.flair_utils import get_label_value, read_corpus
 from disease_codification.metrics import calculate_mean_average_precision
@@ -34,18 +33,18 @@ class XOVA:
 
     def train(
         self,
-        matcher_training_params: dict = {},
         upload_matcher_to_gcp: bool = False,
         upload_ranker_to_gcp: bool = False,
-        split_types_train_ranker: List[str] = ["train", "dev"],
         train_matcher=True,
         train_ranker=True,
+        ranker_train_args: dict = {},
+        matcher_train_args: dict = {},
     ):
         if train_matcher:
-            self.matcher.train(training_params=matcher_training_params, upload_to_gcp=upload_matcher_to_gcp)
+            self.matcher.train(upload_to_gcp=upload_matcher_to_gcp, **matcher_train_args)
         self.matcher.create_corpus_of_incorrectly_predicted()
         if train_ranker:
-            self.ranker.train(upload_to_gcp=upload_ranker_to_gcp, split_types_train=split_types_train_ranker)
+            self.ranker.train(upload_to_gcp=upload_ranker_to_gcp, **ranker_train_args)
 
     def upload_to_gcp(self):
         self.matcher.upload_to_gcp()

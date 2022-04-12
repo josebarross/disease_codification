@@ -1,21 +1,20 @@
-import numpy as np
 import statistics
 from pathlib import Path
 from typing import Dict, List
-from disease_codification.custom_io import create_dir_if_dont_exist, load_pickle, save_as_pickle
 
+import numpy as np
+from disease_codification.custom_io import create_dir_if_dont_exist, load_pickle, save_as_pickle
 from disease_codification.flair_utils import read_corpus
-from flair.data import Sentence, MultiCorpus
+from disease_codification.gcp import download_blob_file, upload_blob_file
+from disease_codification.process_dataset.mapper import Augmentation
+from disease_codification.utils import chunks
+from flair.data import MultiCorpus, Sentence
 from flair.embeddings import TransformerDocumentEmbeddings
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import average_precision_score
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.preprocessing import MultiLabelBinarizer
 from xgboost import XGBClassifier
-
-from disease_codification.gcp import download_blob_file, upload_blob_file
-from disease_codification.process_dataset.mapper import NERAugmentation
-from disease_codification.utils import chunks
 
 
 class Ranker:
@@ -27,14 +26,6 @@ class Ranker:
         cluster_classifier={},
         cluster_label_binarizer={},
         cluster_tfidf: Dict[str, TfidfVectorizer] = {},
-        transformer_for_embedding: str = None,
-        use_incorrect_matcher_predictions: bool = False,
-        subset: int = 0,
-        augmentation: List[Augmentation] = [
-            NERAugmentation.mention,
-            NERAugmentation.sentence,
-            NERAugmentation.stripped,
-        ],
     ):
         self.indexers_path: Path = indexers_path
         self.models_path: Path = models_path
@@ -44,14 +35,7 @@ class Ranker:
         self.cluster_tfidf = cluster_tfidf
         self.mappings: Dict[str, str] = load_pickle(self.indexers_path / self.indexer / "mappings.pickle")
         self.clusters: List[str] = set(self.mappings.values())
-        self.transformer_for_embedding = (
-            TransformerDocumentEmbeddings(transformer_for_embedding, layers="-1,-2,-3,-4", fine_tune=False)
-            if transformer_for_embedding
-            else None
-        )
-        self.subset = subset
-        self.use_incorrect_matcher_predictions = use_incorrect_matcher_predictions
-        self.ner_augmentation = ner_augmentation
+        self.transformer_for_embedding = None
         Ranker.create_directories(models_path, indexer)
 
     @classmethod
@@ -81,29 +65,35 @@ class Ranker:
             indexers_path,
             models_path,
             indexer,
-            cluster_classifier,
-            cluster_label_binarizer,
-            cluster_tfidf,
+            cluster_classifier=cluster_classifier,
+            cluster_label_binarizer=cluster_label_binarizer,
+            cluster_tfidf=cluster_tfidf,
         )
 
-    def _read_sentences(self, cluster: str, split_types: List[str]) -> List[Sentence]:
+    def _read_sentences(
+        self,
+        cluster: str,
+        split_types: List[str],
+        augmentation: List[Augmentation] = [],
+        use_incorrect_matcher_predictions: bool = False,
+        subset: int = 0,
+    ) -> List[Sentence]:
         filename = f"ranker_{cluster}"
         corpus = read_corpus(self.indexers_path / self.indexer / "ranker", filename)
-        corpus_descriptions = read_corpus(self.indexers_path / self.indexer / "description", filename, only_train=True)
-        corpuses = [corpus, corpus_descriptions]
+        corpora = [corpus]
         incorrect_matcher_path = self.models_path / self.indexer / "incorrect-matcher"
-        if self.use_incorrect_matcher_predictions and incorrect_matcher_path.exists():
+        if use_incorrect_matcher_predictions and incorrect_matcher_path.exists():
             incorrect_matcher_corpus = read_corpus(incorrect_matcher_path, f"incorrect_{cluster}", only_train=True)
-            corpuses.append(incorrect_matcher_corpus)
-        for aug in self.ner_augmentation:
-            ner_aug = read_corpus(self.indexers_path / self.indexer / str(aug), f"ranker_{cluster}", only_train=True)
-            corpuses.append(ner_aug)
-        multi_corpus = MultiCorpus(corpuses)
+            corpora.append(incorrect_matcher_corpus)
+        for aug in augmentation:
+            aug = read_corpus(self.indexers_path / self.indexer / f"ranker-{aug}", cluster, only_train=True)
+            corpora.append(aug)
+        multi_corpus = MultiCorpus(corpora)
         sentences = []
         for split_type in split_types:
             sentences += list(getattr(multi_corpus, split_type))
-        if self.subset and len(sentences) < self.subset:
-            sentences = sentences[: self.subset]
+        if subset and len(sentences) < subset:
+            sentences = sentences[:subset]
         return sentences
 
     def _set_multi_label_binarizer(self, cluster: str):
@@ -122,7 +112,12 @@ class Ranker:
         labels_matrix = mlb.transform([[label.value for label in s.get_labels("gold")] for s in sentences])
         return labels_matrix
 
-    def _get_embeddings(self, cluster: str, sentences: List[Sentence]):
+    def _get_embeddings(self, cluster: str, sentences: List[Sentence], transformer_for_embedding: str = None):
+        self.transformer_for_embedding = (
+            TransformerDocumentEmbeddings(transformer_for_embedding, layers="-1,-2,-3,-4", fine_tune=False)
+            if not self.transformer_for_embedding and transformer_for_embedding
+            else None
+        )
         embeddings = self.cluster_tfidf[cluster].transform(s.to_original_text() for s in sentences)
         if self.transformer_for_embedding:
             self.transformer_for_embedding.model.eval()
@@ -135,14 +130,29 @@ class Ranker:
         print("Got embeddings")
         return embeddings
 
-    def train(self, upload_to_gcp: bool = False, split_types_train: List[str] = ["train", "dev"]):
+    def train(
+        self,
+        upload_to_gcp: bool = False,
+        split_types_train: List[str] = ["train", "dev"],
+        augmentation: List[Augmentation] = [
+            Augmentation.ner_mention,
+            Augmentation.ner_sentence,
+            Augmentation.ner_stripped,
+            Augmentation.descriptions_codiesp_cie,
+        ],
+        use_incorrect_matcher_predictions: bool = False,
+        subset: int = 0,
+        transformer_for_embedding: str = None,
+    ):
         len_clusters = len(self.clusters)
         for i, cluster in enumerate(self.clusters):
             print(f"Training for cluster {cluster} - {i}/{len_clusters}")
             self._set_multi_label_binarizer(cluster)
             self._set_tfidf(cluster)
-            sentences = self._read_sentences(cluster, split_types_train)
-            embeddings = self._get_embeddings(cluster, sentences)
+            sentences = self._read_sentences(
+                cluster, split_types_train, augmentation, use_incorrect_matcher_predictions, subset
+            )
+            embeddings = self._get_embeddings(cluster, sentences, transformer_for_embedding)
             labels = self._get_labels_matrix(cluster, sentences)
             if not labels.any() or not sentences:
                 raise Exception

@@ -1,13 +1,12 @@
-from enum import Enum
 import itertools
+from enum import Enum
 from functools import partial
 from pathlib import Path
 from typing import Dict, List
 
 import numpy as np
 from disease_codification.custom_io import create_dir_if_dont_exist, save_as_pickle, write_fasttext_file
-from disease_codification.process_dataset.cie10 import cluster_assigner, get_cie10_df
-from disease_codification.process_dataset.mapper import mapper_process_function, NERAugmentation
+from disease_codification.process_dataset.mapper import Augmentation, mapper_process_function
 
 
 class ClusteringType(Enum):
@@ -22,10 +21,18 @@ class Indexer:
         corpuses_path: Path,
         indexers_path: Path,
         clustering_type: ClusteringType = ClusteringType.cie10,
-        ner_augmentation: List[NERAugmentation] = [
-            NERAugmentation.sentence,
-            NERAugmentation.stripped,
-            NERAugmentation.mention,
+        augmentation_matcher: List[Augmentation] = [Augmentation.descriptions_codiesp_cie, Augmentation.ner_sentence],
+        augmentation_ranker: List[Augmentation] = [
+            Augmentation.descriptions_codiesp_cie,
+            Augmentation.ner_sentence,
+            Augmentation.ner_stripped,
+            Augmentation.ner_mention,
+        ],
+        augmentation_corpus: List[Augmentation] = [
+            Augmentation.descriptions_codiesp_cie,
+            Augmentation.ner_sentence,
+            Augmentation.ner_stripped,
+            Augmentation.ner_mention,
         ],
         subset: int = None,
     ):
@@ -33,9 +40,11 @@ class Indexer:
         self.corpuses_path = corpuses_path
         self.indexer_path = indexers_path / corpus
         self.clustering_type = clustering_type
-        self.ner_augmentation = ner_augmentation
-        self.df_sentences, self.df_labels = mapper_process_function[corpus]["sentence"](corpuses_path)
-        self.df_labels_dict = dict(zip(self.df_labels["label"], self.df_labels["spanish_description"]))
+        self.augmentation_matcher = augmentation_matcher
+        self.augmentation_ranker = augmentation_ranker
+        self.augmentation_corpus = augmentation_corpus
+        self.df_sentences = mapper_process_function[corpus]["sentence"](corpuses_path)
+        self.df_labels = mapper_process_function[corpus]["labels"](corpuses_path, for_augmentation=False)
         self.__create_paths__()
         if subset:
             self.df_sentences = self.df_sentences[:subset]
@@ -45,11 +54,15 @@ class Indexer:
         create_dir_if_dont_exist(self.indexer_path / "corpus")
         create_dir_if_dont_exist(self.indexer_path / "matcher")
         create_dir_if_dont_exist(self.indexer_path / "ranker")
-        create_dir_if_dont_exist(self.indexer_path / "description")
-        for aug in self.ner_augmentation:
-            create_dir_if_dont_exist(self.indexer_path / str(aug))
+        for aug in self.augmentation_matcher:
+            create_dir_if_dont_exist(self.indexer_path / f"matcher-{aug}")
+        for aug in self.augmentation_ranker:
+            create_dir_if_dont_exist(self.indexer_path / f"ranker-{aug}")
+        for aug in self.augmentation_corpus:
+            create_dir_if_dont_exist(self.indexer_path / f"corpus-{aug}")
 
     def create_corpuses(self):
+        print("Creating corpuses for use by models")
         self.__filter_labels_only_in_dataset__()
         self.mappings_label_to_cluster = self.__clusterize__()
         self.clusters = set(self.mappings_label_to_cluster.values())
@@ -57,22 +70,22 @@ class Indexer:
         self.__create_corpus__()
         self.__create_matcher_corpus__()
         self.__create_ranker_corpus__()
-        self.__create_description_corpus__()
-        self.__create_ner_augmentation_corpus__()
+        self.__create_augmentation_corpora__()
         self.print_info_of_labels()
 
     def __filter_labels_only_in_dataset__(self):
-        print(f"Original shape: {len(self.df_labels_dict)}")
-        labels = set(itertools.chain.from_iterable([ls for ls in self.df_sentences["labels"].to_list()]))
-        self.df_labels_dict = {k: v for k, v in self.df_labels_dict.items() if k in labels}
-        print(f"Final shape: {len(self.df_labels_dict)}")
+        labels_in_sentences = set(itertools.chain.from_iterable([ls for ls in self.df_sentences["labels"].to_list()]))
+        labels_in_descriptions = self.df_labels["labels"].to_list()
+        print(f"Original shape: {len(labels_in_descriptions)}")
+        self.all_labels = [label for label in labels_in_descriptions if label in labels_in_sentences]
+        print(f"Final shape: {len(self.all_labels)}")
 
     def __clusterize__(self) -> Dict[str, str]:
         if self.clustering_type == ClusteringType.first_letter:
-            mappings = {label: label[0] for label in self.df_labels_dict.keys()}
+            mappings = {label: label[0] for label in self.all_labels}
         elif self.clustering_type == ClusteringType.cie10:
-            clusters_assigned = cluster_assigner(self.df_labels_dict.keys())
-            mappings = dict(zip(self.df_labels_dict.keys(), clusters_assigned))
+            clusters_assigned = cluster_assigner(self.all_labels)
+            mappings = dict(zip(self.all_labels, clusters_assigned))
         return mappings
 
     def __create_corpus__(self):
@@ -105,11 +118,11 @@ class Indexer:
                 )
 
     def __labels_to_clusters__(self, ls):
-        try:
-            return list({self.mappings_label_to_cluster[l] for l in ls})
-        except KeyError:
-            print(ls)
-            raise
+        labels = list({self.mappings_label_to_cluster[l] for l in ls})
+        not_found_labels = [i for i, l in enumerate(labels) if not l]
+        if not_found_labels:
+            print(f"Labels not found: {[ls[i] for i in not_found_labels]}")
+        return labels
 
     def __is_in_cluster__(self, cluster, clusters):
         return cluster in clusters
@@ -125,80 +138,20 @@ class Indexer:
         print(f"Mean: {np.mean(counts)}")
         print(f"Std: {np.std(counts)}")
 
-    def __create_description_corpus__(self):
-        sentences_codi, labels_codi = self._from_codiesp_descriptions()
-        sentences_cie, labels_cie = self._from_cie10_descriptions()
-        write_fasttext_file(
-            sentences_codi + sentences_cie,
-            labels_codi + labels_cie,
-            self.indexer_path / "description" / "corpus_train.txt",
-        )
-        write_fasttext_file(
-            sentences_codi + sentences_cie,
-            [self.__labels_to_clusters__(ls) for ls in labels_codi + labels_cie],
-            self.indexer_path / "description" / "matcher_train.txt",
-        )
-        for cluster in self.clusters:
-            sentences_cluster = []
-            labels_cluster = []
-            for sentence, ls in zip(sentences_codi, labels_codi):
-                ls = [l for l in ls if self.mappings_label_to_cluster[l] == cluster]
-                if ls:
-                    sentences_cluster.append(sentence)
-                    labels_cluster.append(ls)
+    def __create_augmentation_corpora__(self):
+        print("Matcher")
+        for aug in self.augmentation_matcher:
+            print(aug)
+            df = mapper_process_function[self.corpus][aug](self.corpuses_path)
+            sentences = df["sentence"].to_list()
+            labels = [self.__labels_to_clusters__(ls) for ls in df["labels"].to_list()]
             write_fasttext_file(
-                sentences_cluster, labels_cluster, self.indexer_path / "description" / f"ranker_{cluster}_train.txt"
+                sentences,
+                labels,
+                self.indexer_path / f"matcher-{aug}" / f"matcher_train.txt",
             )
-
-    def _from_codiesp_descriptions(self):
-        sentences = []
-        labels = []
-        for label, sentence in self.df_labels_dict.items():
-            if sentence != "Sin descripcion":
-                sentences.append(sentence)
-                labels.append([label])
-        return sentences, labels
-
-    def _from_cie10_descriptions(self):
-        all_labels = self.mappings_label_to_cluster.keys()
-        cie10_df = get_cie10_df(self.corpuses_path)
-        sentences = []
-        labels = []
-        for _, row in cie10_df.iterrows():
-            code = row["code"]
-            if len(code.split("-")) == 2:
-                start = code.split("-")[0]
-                end = code.split("-")[1]
-                ls = self._determine_labels_in_range(start, end, all_labels)
-            else:
-                ls = self._determine_labels_startswith(code, all_labels)
-            if ls:
-                sentences.append(row["description"])
-                labels.append(ls)
-        return sentences, labels
-
-    def _determine_labels_startswith(self, code: str, all_labels: List[str]):
-        return [label for label in all_labels if label.startswith(code.lower())]
-
-    def _determine_labels_in_range(self, start: str, end: str, all_labels: List[str]):
-        start_cat = start[0].lower()
-        end_cat = end[0].lower()
-        starts_int = start[1:3] if not start[1:3] == "01" else "00"
-        ends_int = end[1:3]
-        labels_in_range = []
-        for label in all_labels:
-            label_int = label[1:3]
-            label_in_range = (
-                (start_cat == end_cat and label.startswith(start_cat) and starts_int <= label_int <= ends_int)
-                or (label.startswith(start_cat) and label_int >= starts_int)
-                or (label.startswith(end_cat) and label_int <= ends_int)
-            )
-            if label_in_range:
-                labels_in_range.append(label)
-        return labels_in_range
-
-    def __create_ner_augmentation_corpus__(self):
-        for aug in self.ner_augmentation:
+        print("Ranker")
+        for aug in self.augmentation_ranker:
             print(aug)
             df = mapper_process_function[self.corpus][aug](self.corpuses_path)
             for cluster in self.clusters:
@@ -215,5 +168,52 @@ class Indexer:
                 write_fasttext_file(
                     cluster_sentences,
                     cluster_labels,
-                    self.indexer_path / str(aug) / f"ranker_{cluster}_train.txt",
+                    self.indexer_path / f"ranker-{aug}" / f"{cluster}_train.txt",
                 )
+        print("Corpus")
+        for aug in self.augmentation_corpus:
+            print(aug)
+            df = mapper_process_function[self.corpus][aug](self.corpuses_path)
+            write_fasttext_file(
+                df["sentence"].to_list(),
+                df["labels"].to_list(),
+                self.indexer_path / f"corpus-{aug}" / f"corpus_train.txt",
+            )
+
+
+clusters = {
+    "a00-b99": "Ciertas enfermedades infecciosas y parasitarias",
+    "c00-d49": "Tumores [neoplasias]",
+    "d50-d89": "Enfermedades de la sangre y de los órganos hematopoyéticos, y ciertos trastornos que afectan el mecanismo de la inmunidad",
+    "e00-e89": "Enfermedades endocrinas, nutricionales y metabolicas",
+    "f00-f99": "Trastornos mentales y del comportamiento",
+    "g00-g99": "Enfermedades del sistema nervioso",
+    "h00-h59": "Enfermedades del ojo y sus anexos",
+    "h60-h95": "Enfermedades del oído y de la apófisis mastoides",
+    "i00-i99": "Enfermedades del sistema circulatorio",
+    "j00-j99": "Enfermedades del sistema respiratorio",
+    "k00-k95": "Enfermedades del sistema digestivo",
+    "l00-l99": "Enfermedades de la piel y del tejido subcutáneo",
+    "m00-m99": "Enfermedades del sistema osteomuscular y del tejido conjuntivo",
+    "n00-n99": "Enfermedades del sistema genitourinario",
+    "o00-o9a": "Embarazo, parto y puerperio",
+    "p00-p96": "Ciertas afecciones originadas en el período perinatal",
+    "q00-q99": "Malformaciones congénitas, deformidades y anomalías cromosómicas",
+    "r00-r99": " Síntomas, signos y hallazgos anormales clínicos y de laboratorio, no clasificados en otra parte",
+    "s00-t88": "Traumatismos, envenenamientos y algunas otras consecuencias de causas externas",
+    "v00-y99": "Causas externas de morbilidad y de mortalidad",
+    "z00-z99": "Factores que influyen en el estado de salud y contacto con los servicios de salud",
+}
+
+
+def cluster_assigner(labels: List[str]):
+    clusters_assigned = [assign_label(label) for label in labels]
+    assert len(labels) == len(clusters_assigned)
+    return clusters_assigned
+
+
+def assign_label(label):
+    category = label[:3]
+    for cluster in clusters:
+        if cluster.split("-")[0] <= category <= cluster.split("-")[1]:
+            return cluster

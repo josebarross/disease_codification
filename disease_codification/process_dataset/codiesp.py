@@ -1,41 +1,42 @@
 import itertools
+import re
 from pathlib import Path
+
 import pandas as pd
-import random
 
 
-def preprocess_codiesp(corpuses_path: Path):
-    corpus_path_labels = corpuses_path / "codiesp_codes"
-    corpus_path_sentences = corpuses_path / "codiesp"
-    df_sentences = preprocess_sentences_df(corpus_path_sentences)
-    df_labels = preprocess_labels_df(corpus_path_labels, df_sentences)
-    return df_sentences, df_labels
-
-
-def preprocess_labels_df(corpus_path: Path, df_sentences):
+def process_codiesp_labels(corpuses_path: Path, for_augmentation=True) -> pd.DataFrame:
+    corpus_path = corpuses_path / "codiesp_codes"
+    df_sentences = process_codiesp_sentence(corpuses_path)
     df = pd.read_csv(
         corpus_path / "codiesp-D_codes.tsv",
         sep="\t",
         on_bad_lines="skip",
         header=None,
-        names=["label", "spanish_description", "english_description"],
+        names=["labels", "sentence", "english_description"],
     )
-    df["label"] = df["label"].str.lower()
+    df["labels"] = df["labels"].str.lower()
     sentences_labels = set(itertools.chain.from_iterable([label for label in df_sentences["labels"].values]))
     for label in sentences_labels:
-        if label not in df["label"].values:
+        if label not in df["labels"].values:
             df.loc[len(df.index)] = [label, "Sin descripcion", "Sin descripcion"]
-    df["cluster"] = df["label"].str.slice(0, 1)
-    df["split_type"] = get_split_types(df)
-    return df
+    df = df[df["labels"].isin(sentences_labels)]
+    if for_augmentation:
+        df = df[df["sentence"] != "Sin descripcion"]
+        df = df.drop_duplicates(["sentence", "labels"])
+        df["labels"] = df["labels"].apply(lambda x: [x])
+    return df.reset_index()
 
 
-def preprocess_sentences_df(corpus_path: Path):
-    sentences = []
+def process_codiesp_sentence(corpuses_path: Path) -> pd.DataFrame:
+    corpus_path = corpuses_path / "codiesp"
     df = pd.DataFrame()
     for split_type in ["train", "test", "dev"]:
         df_split_type = pd.read_csv(
-            corpus_path / split_type / f"{split_type}D.tsv", sep="\t", header=None, names=["filename", "labels"]
+            corpus_path / split_type / f"{split_type}D.tsv",
+            sep="\t",
+            header=None,
+            names=["filename", "labels"],
         )
         df_split_type = df_split_type.groupby("filename")["labels"].apply(list).reset_index()
         df_split_type["split_type"] = split_type
@@ -47,19 +48,72 @@ def preprocess_sentences_df(corpus_path: Path):
     return df.reset_index()
 
 
-def get_split_types(labels_df):
-    len_list = len(labels_df)
-    my_list = get_split("train", len_list) + get_split("dev", len_list)
-    random.shuffle(my_list)
-    return my_list[:len_list]
+def preprocess_ner_mentions(corpuses_path: Path, for_augmentation=True) -> pd.DataFrame:
+    df = pd.DataFrame()
+    for split_type in ["train", "dev"]:
+        df_split_type = pd.read_csv(
+            corpuses_path / "codiesp" / split_type / f"{split_type}X.tsv",
+            sep="\t",
+            on_bad_lines="skip",
+            header=None,
+            names=["document", "type", "labels", "sentence", "position"],
+        )
+        df_split_type = df_split_type[df_split_type["type"] == "DIAGNOSTICO"]
+        df = pd.concat([df, df_split_type])
+    if for_augmentation:
+        df = df.drop_duplicates(["sentence", "labels"])
+        df["labels"] = df["labels"].apply(lambda x: [x])
+    return df.reset_index()
 
 
-def get_split(split_type, len_list):
-    percentage = {"train": 0.8, "dev": 0.2}
-    return [split_type] * round(len_list * percentage[split_type] + 0.5)
+def preprocess_ner_sentences(corpuses_path: Path) -> pd.DataFrame:
+    sentences_df = pd.DataFrame()
+    documents_df = process_codiesp_sentence(corpuses_path)
+    ner_df = preprocess_ner_mentions(corpuses_path, for_augmentation=False)
+    sentences = []
+    labels = []
+    for _, row_documents in documents_df.iterrows():
+        document_sentences = [s.strip() for s in re.split("\.|\n", row_documents["sentence"]) if s]
+        document_labels = ner_df[ner_df["document"] == row_documents["filename"]]
+        end_char = 0
+        for sentence in document_sentences:
+            start_char = end_char
+            end_char += len(sentence) + 1
+            labels_sentence = []
+            for _, row_label in document_labels.iterrows():
+                positions = row_label["position"].split(";")
+                if len(positions) == 1 and any(
+                    start_char <= int(position.split(" ")[0]) and end_char >= int(position.split(" ")[1])
+                    for position in positions
+                ):
+                    labels_sentence.append(row_label["labels"])
+            sentences.append(sentence)
+            labels.append(labels_sentence)
+    sentences_df["sentence"] = sentences
+    sentences_df["labels"] = labels
+    return sentences_df
 
 
-def read_sentence(corpus_path: Path, split_type: str, filename: str):
+def preprocess_ner_stripped(corpuses_path: Path) -> pd.DataFrame:
+    df = pd.DataFrame()
+    for split_type in ["train", "dev"]:
+        df_split_type = pd.read_csv(
+            corpuses_path / "codiesp" / split_type / f"{split_type}X.tsv",
+            sep="\t",
+            on_bad_lines="skip",
+            header=None,
+            names=["document", "type", "labels", "sentence", "location"],
+        )
+        df_split_type = df_split_type[df_split_type["type"] == "DIAGNOSTICO"]
+        group = df_split_type.groupby("document")
+        labels = group["labels"].apply(list)
+        sentences = group["sentence"].apply(" ".join)
+        df_split_type = labels.to_frame("labels").join(sentences.to_frame("sentence"))
+        df = pd.concat([df, df_split_type])
+    return df.reset_index()
+
+
+def read_sentence(corpus_path: Path, split_type: str, filename: str) -> str:
     filename = corpus_path / split_type / "text_files" / f"{filename}.txt"
     with open(filename, "r") as f:
         return f.read()

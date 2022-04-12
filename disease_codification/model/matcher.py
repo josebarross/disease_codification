@@ -1,5 +1,6 @@
 from collections import defaultdict
 from pathlib import Path
+from typing import List
 
 import numpy as np
 from disease_codification.custom_io import create_dir_if_dont_exist, load_pickle, write_fasttext_file
@@ -14,6 +15,7 @@ from flair.models import TextClassifier
 from sklearn.metrics import average_precision_score
 
 from disease_codification.metrics import calculate_mean_average_precision
+from disease_codification.process_dataset.mapper import Augmentation
 
 
 class Matcher:
@@ -48,14 +50,40 @@ class Matcher:
         filename = f"{self.indexer}/matcher/final-model.pt"
         upload_blob_file(self.models_path / filename, filename)
 
-    def train(self, training_params: dict = {}, upload_to_gcp: bool = False):
+    def train(
+        self,
+        upload_to_gcp: bool = False,
+        augmentation: List[Augmentation] = [
+            Augmentation.ner_sentence,
+            Augmentation.descriptions_codiesp_cie,
+        ],
+        max_epochs: int = 15,
+        mini_batch_size: int = 10,
+        remove_after_running: bool = False,
+        downsample: int = 0.0,
+        train_with_dev: bool = True,
+        layers="-1",
+        transformer_name="PlanTL-GOB-ES/roberta-base-biomedical-es",
+    ):
         print(f"Finetuning for {self.indexer}")
         corpus = read_corpus(self.indexers_path / self.indexer / "matcher", "matcher")
-        corpus_descriptions = read_corpus(self.indexers_path / self.indexer / "description", "matcher", only_train=True)
-        multi_corpus = CustomMultiCorpus([corpus, corpus_descriptions])
+        corpora = [corpus]
+        for aug in augmentation:
+            aug = read_corpus(self.indexers_path / self.indexer / f"matcher-{aug}", "matcher", only_train=True)
+            corpora.append(aug)
+        multi_corpus = CustomMultiCorpus(corpora)
         filepath = f"{self.indexer}/matcher"
         self.classifier = train_transformer_classifier(
-            self.classifier, multi_corpus, self.models_path / filepath, **training_params
+            self.classifier,
+            multi_corpus,
+            self.models_path / filepath,
+            max_epochs=max_epochs,
+            mini_batch_size=mini_batch_size,
+            remove_after_running=remove_after_running,
+            downsample=downsample,
+            train_with_dev=train_with_dev,
+            layers=layers,
+            transformer_name=transformer_name,
         )
         if upload_to_gcp:
             self.upload_to_gcp()
@@ -72,15 +100,6 @@ class Matcher:
         print("Evaluation of Matcher")
         self.predict(sentences)
         calculate_mean_average_precision(sentences, self.mappings.values(), label_name_predicted="matcher")
-
-    def _get_aps_of_sentence(self, sentence, labels, index_labels):
-        y_true = np.zeros(len(labels))
-        y_scores = np.zeros(len(labels))
-        for ll in sentence.get_labels("gold"):
-            y_true[index_labels[ll.value]] = 1.0
-        for ll in sentence.get_labels("matcher"):
-            y_scores[index_labels[ll.value]] = ll.score
-        return average_precision_score(y_true, y_scores)
 
     def create_corpus_of_incorrectly_predicted(self):
         mappings = load_pickle(self.indexers_path / self.indexer / "mappings.pickle")
