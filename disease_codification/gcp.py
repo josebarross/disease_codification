@@ -6,11 +6,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-storage_client = storage.Client(project=os.getenv("PROJECT_ID"))
-
 
 def upload_blob(python_obj: object, filename: str):
     """Uploads a python object to the bucket."""
+    storage_client = storage.Client(project=os.getenv("PROJECT_ID"))
     pickle_out = pickle.dumps(python_obj)
     bucket = storage_client.bucket(os.getenv("BUCKET"))
     blob = bucket.blob(filename)
@@ -19,6 +18,7 @@ def upload_blob(python_obj: object, filename: str):
 
 def upload_blob_file(filename_in: object, filename_out: str):
     """Uploads a python object to the bucket."""
+    storage_client = storage.Client(project=os.getenv("PROJECT_ID"))
     bucket = storage_client.bucket(os.getenv("BUCKET"))
     blob = bucket.blob(filename_out)
     blob.upload_from_filename(filename_in)
@@ -26,6 +26,7 @@ def upload_blob_file(filename_in: object, filename_out: str):
 
 def download_blob(filename: str):
     """Uploads a python object to the bucket."""
+    storage_client = storage.Client(project=os.getenv("PROJECT_ID"))
     bucket = storage_client.bucket(os.getenv("BUCKET"))
     blob = bucket.blob(filename)
     pickle_in = blob.download_as_string()
@@ -33,6 +34,7 @@ def download_blob(filename: str):
 
 
 def download_blob_file(filename_in: str, filename_out: str):
+    storage_client = storage.Client(project=os.getenv("PROJECT_ID"))
     bucket = storage_client.bucket(os.getenv("BUCKET"))
     blob = bucket.blob(filename_in)
     blob.download_to_filename(filename_out)
