@@ -1,10 +1,12 @@
 from pathlib import Path
+from typing import List
 from disease_codification.custom_io import load_pickle
 from disease_codification.flair_utils import get_label_value, read_corpus
-from disease_codification.metrics import calculate_mean_average_precision
+from disease_codification.metrics import Metrics, calculate_mean_average_precision, calculate_summary
 from disease_codification.model.matcher import Matcher
 
 from disease_codification.model.ranker import Ranker
+from flair.data import Sentence
 
 
 class XOVA:
@@ -35,8 +37,8 @@ class XOVA:
         self,
         upload_matcher_to_gcp: bool = False,
         upload_ranker_to_gcp: bool = False,
-        train_matcher=True,
-        train_ranker=True,
+        train_matcher: bool = True,
+        train_ranker: bool = True,
         ranker_train_args: dict = {},
         matcher_train_args: dict = {},
     ):
@@ -54,29 +56,57 @@ class XOVA:
         self.matcher.save()
         self.ranker.save()
 
-    def predict(self, sentences):
-        self.matcher.predict(sentences)
-        self.ranker.predict(sentences)
-        self.mix_with_probabilities(sentences)
+    def predict(self, sentences: List[Sentence], return_probabilities: bool = True):
+        self.matcher.predict(sentences, return_probabilities=return_probabilities)
+        self.ranker.predict(sentences, return_probabilities=return_probabilities)
+        if return_probabilities:
+            self.mix_with_probabilities(sentences)
+        else:
+            self.predict_only_matched_clusters(sentences)
 
-    def mix_with_probabilities(self, sentences):
+    def mix_with_probabilities(self, sentences: List[Sentence]):
         print("Joining probabilities")
         for sentence in sentences:
-            matcher = sentence.get_labels("matcher")
-            ranker = sentence.get_labels("ranker")
+            matcher = sentence.get_labels("matcher_proba")
+            ranker = sentence.get_labels("ranker_proba")
             for label in ranker:
                 if label.value == "<incorrect-matcher>":
                     continue
                 cluster = self.mappings[get_label_value(label)]
                 score = next(l.score for l in matcher if cluster == get_label_value(l)) * label.score
-                sentence.add_label("label_predicted", label.value, score)
+                sentence.add_label("label_predicted_proba", label.value, score)
 
-    def eval(self):
+    def predict_only_matched_clusters(self, sentences: List[Sentence]):
+        for sentence in sentences:
+            matcher_predictions = [get_label_value(label_matcher) for label_matcher in sentence.get_labels("matcher")]
+            ranker_predictions = sentence.get_labels("ranker")
+            for label_ranker in ranker_predictions:
+                if label_ranker.value == "<incorrect-matcher>":
+                    continue
+                if self.mappings[get_label_value(label_ranker)] in matcher_predictions:
+                    sentence.add_label("label_predicted", label_ranker.value, 1.0)
+
+    def eval(self, eval_metrics: List[Metrics] = [Metrics.summary, Metrics.map], first_n_digits_summary: int = 0):
         corpus = read_corpus(self.indexers_path / self.indexer / "corpus", "corpus")
         corpus_matcher = read_corpus(self.indexers_path / self.indexer / "matcher", "matcher")
         sentences_matcher = [s for s in corpus_matcher.test]
-        self.matcher.eval(sentences_matcher)
-        self.ranker.eval_weighted()
         sentences = [s for s in corpus.test]
-        self.predict(sentences)
-        calculate_mean_average_precision(sentences, self.mappings.keys())
+        self.matcher.eval(sentences_matcher, eval_metrics=eval_metrics)
+        self.ranker.eval_weighted(eval_weighted_metrics=eval_metrics)
+        for metric in eval_metrics:
+            if metric == Metrics.map:
+                self.predict(sentences)
+                calculate_mean_average_precision(
+                    sentences, self.mappings.keys(), label_name_predicted="label_predicted_proba"
+                )
+            elif metric == Metrics.summary:
+                self.predict(sentences, return_probabilities=False)
+                calculate_summary(
+                    sentences,
+                    self.mappings.keys(),
+                    label_name_predicted="label_predicted",
+                    first_n_digits=first_n_digits_summary,
+                )
+                calculate_mean_average_precision(
+                    sentences, self.mappings.keys(), label_name_predicted="label_predicted"
+                )

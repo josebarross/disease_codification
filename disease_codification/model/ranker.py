@@ -6,12 +6,13 @@ import numpy as np
 from disease_codification.custom_io import create_dir_if_dont_exist, load_pickle, save_as_pickle
 from disease_codification.flair_utils import read_corpus
 from disease_codification.gcp import download_blob_file, upload_blob_file
+from disease_codification.metrics import Metrics
 from disease_codification.process_dataset.mapper import Augmentation
 from disease_codification.utils import chunks
 from flair.data import MultiCorpus, Sentence
 from flair.embeddings import TransformerDocumentEmbeddings
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics import average_precision_score
+from sklearn.metrics import average_precision_score, classification_report, f1_score
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.preprocessing import MultiLabelBinarizer
 from xgboost import XGBClassifier
@@ -163,35 +164,52 @@ class Ranker:
         if upload_to_gcp:
             self.upload_to_gcp()
 
-    def predict(self, sentences: List[Sentence]):
+    def predict(self, sentences: List[Sentence], return_probabilities=True):
         print("Predicting ranker")
         for cluster in self.clusters:
             print(cluster)
             embeddings = self._get_embeddings(cluster, sentences)
-            predictions = self.cluster_classifier[cluster].predict_proba(embeddings)
-            classes = self.cluster_label_binarizer[cluster].classes_
-            for sentence, prediction in zip(sentences, predictions):
-                for i, label in enumerate(classes):
-                    sentence.add_label("ranker", label, prediction[i])
-
-    def eval_weighted(self, split_types: List[str] = ["dev", "test"]):
-        print(f"Calculating MAP Weighted for {split_types}")
-        map_clusters = {}
-        for split_type in split_types:
-            for cluster in self.clusters:
-                sentences = self._read_sentences(cluster, [split_type])
-                embeddings = self._get_embeddings(cluster, sentences)
+            if return_probabilities:
                 predictions = self.cluster_classifier[cluster].predict_proba(embeddings)
-                labels_matrix = self._get_labels_matrix(cluster, sentences)
-                avg_precs = []
-                for y_true, y_scores in zip(labels_matrix, predictions):
-                    avg_precs.append(average_precision_score(y_true, y_scores))
-                map_clusters[cluster] = (statistics.mean(avg_precs), embeddings.shape[0])
-            weighted_map = sum(map_stat * d_points for map_stat, d_points in map_clusters.values()) / sum(
-                d_points for _, d_points in map_clusters.values()
-            )
-            print(map_clusters)
-            print(weighted_map)
+                classes = self.cluster_label_binarizer[cluster].classes_
+                for sentence, prediction in zip(sentences, predictions):
+                    for i, label in enumerate(classes):
+                        sentence.add_label("ranker_proba", label, prediction[i])
+            else:
+                predictions = self.cluster_classifier[cluster].predict(embeddings)
+                classes = self.cluster_label_binarizer[cluster].classes_
+                for sentence, prediction in zip(sentences, predictions):
+                    for i, pred in enumerate(prediction):
+                        if pred:
+                            sentence.add_label("ranker", classes[i], 1.0)
+
+    def eval_weighted(self, split_types: List[str] = ["test"], eval_weighted_metrics: List[Metrics] = [Metrics.map]):
+        for metric in eval_weighted_metrics:
+            print(f"Calculating {metric} weighted for {split_types}")
+            metric_clusters = {}
+            for split_type in split_types:
+                for cluster in self.clusters:
+                    sentences = self._read_sentences(cluster, [split_type])
+                    embeddings = self._get_embeddings(cluster, sentences)
+                    labels_matrix = self._get_labels_matrix(cluster, sentences)
+                    if metric == Metrics.map:
+                        predictions = self.cluster_classifier[cluster].predict_proba(embeddings)
+                        aps = []
+                        for y_true, y_scores in zip(labels_matrix, predictions):
+                            aps.append(average_precision_score(y_true, y_scores))
+                            metric_clusters[cluster] = (statistics.mean(aps), embeddings.shape[0])
+                    elif metric == Metrics.summary:
+                        predictions = self.cluster_classifier[cluster].predict(embeddings)
+                        metric_clusters[cluster] = (
+                            f1_score(labels_matrix, predictions, average="micro"),
+                            embeddings.shape[0],
+                        )
+                weighted_metric = sum(map_stat * d_points for map_stat, d_points in metric_clusters.values()) / sum(
+                    d_points for _, d_points in metric_clusters.values()
+                )
+            print(metric)
+            print(metric_clusters)
+            print(weighted_metric)
 
     def save(self):
         print("Saving model")

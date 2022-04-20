@@ -14,7 +14,7 @@ from disease_codification.gcp import download_blob_file, upload_blob_file
 from flair.models import TextClassifier
 from sklearn.metrics import average_precision_score
 
-from disease_codification.metrics import calculate_mean_average_precision
+from disease_codification.metrics import Metrics, calculate_mean_average_precision, calculate_summary
 from disease_codification.process_dataset.mapper import Augmentation
 
 
@@ -92,14 +92,22 @@ class Matcher:
 
     def predict(self, sentences, return_probabilities=True):
         print("Predicting matcher")
+        label_name = "matcher_proba" if return_probabilities else "matcher"
         self.classifier.predict(
-            sentences, label_name="matcher", return_probabilities_for_all_classes=return_probabilities
+            sentences, label_name=label_name, return_probabilities_for_all_classes=return_probabilities
         )
 
-    def eval(self, sentences):
+    def eval(self, sentences, eval_metrics: List[Metrics] = [Metrics.map]):
         print("Evaluation of Matcher")
-        self.predict(sentences)
-        calculate_mean_average_precision(sentences, self.mappings.values(), label_name_predicted="matcher")
+        for metric in eval_metrics:
+            if metric == Metrics.map:
+                self.predict(sentences, return_probabilities=True)
+                calculate_mean_average_precision(
+                    sentences, self.mappings.values(), label_name_predicted="matcher_proba"
+                )
+            elif metric == Metrics.summary:
+                self.predict(sentences, return_probabilities=False)
+                calculate_summary(sentences, self.mappings.values(), label_name_predicted="matcher")
 
     def create_corpus_of_incorrectly_predicted(self):
         mappings = load_pickle(self.indexers_path / self.indexer / "mappings.pickle")
