@@ -12,3 +12,4 @@ def reproduce_model_codiesp(data_path: Path):
     xova = XOVA(indexers_path, models_path, "codiesp")
     xova.train()
     xova.eval(first_n_digits_summary=3)
+    return xova
