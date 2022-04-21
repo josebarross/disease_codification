@@ -90,7 +90,8 @@ class Ranker:
         multi_corpus = MultiCorpus(corpora)
         sentences = []
         for split_type in split_types:
-            sentences += list(getattr(multi_corpus, split_type))
+            if getattr(multi_corpus, split_type):
+                sentences += list(getattr(multi_corpus, split_type))
         if subset and len(sentences) < subset:
             sentences = sentences[:subset]
         return sentences
@@ -101,9 +102,11 @@ class Ranker:
         mlb.fit([list(labels_cluster) + ["<incorrect-matcher>"]])
         self.cluster_label_binarizer[cluster] = mlb
 
-    def _set_tfidf(self, cluster: str):
+    def _set_tfidf(self, cluster: str, augmentation: List[Augmentation]):
         tfidf = TfidfVectorizer()
-        tfidf.fit(s.to_original_text() for s in self._read_sentences(cluster, ["train", "dev"]))
+        tfidf.fit(
+            s.to_original_text() for s in self._read_sentences(cluster, ["train", "dev"], augmentation=augmentation)
+        )
         self.cluster_tfidf[cluster] = tfidf
 
     def _get_labels_matrix(self, cluster: str, sentences: List[Sentence]):
@@ -146,15 +149,17 @@ class Ranker:
         len_clusters = len(self.clusters)
         for i, cluster in enumerate(self.clusters):
             print(f"Training for cluster {cluster} - {i}/{len_clusters}")
-            self._set_multi_label_binarizer(cluster)
-            self._set_tfidf(cluster)
             sentences = self._read_sentences(
                 cluster, split_types_train, augmentation, use_incorrect_matcher_predictions, subset
             )
+            if not sentences:
+                print("Cluster has no sentences")
+                raise Exception
+            self._set_multi_label_binarizer(cluster)
+            self._set_tfidf(cluster, augmentation)
             embeddings = self._get_embeddings(cluster, sentences, transformer_for_embedding)
             labels = self._get_labels_matrix(cluster, sentences)
-            if not labels.any() or not sentences:
-                raise Exception
+
             clf = OneVsRestClassifier(XGBClassifier(eval_metric="logloss")).fit(embeddings, labels)
             self.cluster_classifier[cluster] = clf
         print("Training Complete")
@@ -190,6 +195,8 @@ class Ranker:
             for split_type in split_types:
                 for cluster in self.clusters:
                     sentences = self._read_sentences(cluster, [split_type])
+                    if not sentences:
+                        continue
                     embeddings = self._get_embeddings(cluster, sentences)
                     labels_matrix = self._get_labels_matrix(cluster, sentences)
                     if metric == Metrics.map:
