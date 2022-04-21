@@ -95,6 +95,8 @@ class Matcher:
         )
 
     def eval(self, sentences, eval_metrics: List[Metrics] = [Metrics.map]):
+        if not sentences:
+            return
         print("Evaluation of Matcher")
         for metric in eval_metrics:
             if metric == Metrics.map:

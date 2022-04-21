@@ -14,6 +14,8 @@ class Metrics(Enum):
 
 
 def calculate_mean_average_precision(sentences, labels_list: List[str], label_name_predicted="label_predicted_proba"):
+    if not sentences:
+        return
     print(f"Calculating map for {label_name_predicted}")
     label_indexes = {label: i for i, label in enumerate(set(labels_list))}
     avg_precs = []
@@ -36,6 +38,8 @@ def calculate_mean_average_precision(sentences, labels_list: List[str], label_na
 def calculate_summary(
     sentences, labels_list: List[str], label_name_predicted="label_predicted", first_n_digits: int = 0
 ):
+    if not sentences:
+        return
     print(f"Calculating summary statistics for {label_name_predicted}")
     labels_list = set(labels_list)
     if first_n_digits:
