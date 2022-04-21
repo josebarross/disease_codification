@@ -1,4 +1,4 @@
-from disease_codification.process_dataset import codiesp, livingner
+from disease_codification.process_dataset import codiesp, livingner, cantemist
 from enum import Enum
 
 
@@ -26,5 +26,14 @@ mapper_process_function = {
         Augmentation.ner_sentence: livingner.process_ner_sentences,
         Augmentation.ner_mention: livingner.process_ner_mentions,
         Augmentation.ner_stripped: livingner.process_ner_stripped,
+    },
+    "cantemist": {
+        "sentence": cantemist.process_sentence,
+        "labels": cantemist.process_labels,
+        "cluster_assigner": cantemist.cluster_assigner,
+        Augmentation.ner_mention: cantemist.process_ner_mentions,
+        Augmentation.ner_sentence: cantemist.process_ner_sentences,
+        Augmentation.ner_stripped: cantemist.process_ner_stripped,
+        Augmentation.descriptions_labels: cantemist.process_labels,
     },
 }

@@ -4,3 +4,4 @@ flair==0.10
 xgboost==1.5.2
 python-dotenv==0.20.0
 google-cloud-storage>=2.0
+openpyxl==3.0.9 
