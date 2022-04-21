@@ -1,10 +1,4 @@
-from disease_codification.process_dataset.codiesp import (
-    preprocess_ner_mentions,
-    preprocess_ner_sentences,
-    preprocess_ner_stripped,
-    process_codiesp_labels,
-    process_codiesp_sentence,
-)
+from disease_codification.process_dataset import codiesp, livingner
 from enum import Enum
 
 
@@ -12,16 +6,25 @@ class Augmentation(Enum):
     ner_sentence = "ner_sentence"
     ner_stripped = "ner_stripped"
     ner_mention = "ner_mention"
-    descriptions_codiesp_cie = "descriptions_codiesp_cie"
+    descriptions_labels = "descriptions_labels"
 
 
 mapper_process_function = {
     "codiesp": {
-        "sentence": process_codiesp_sentence,
-        "labels": process_codiesp_labels,
-        Augmentation.ner_sentence: preprocess_ner_sentences,
-        Augmentation.ner_mention: preprocess_ner_mentions,
-        Augmentation.ner_stripped: preprocess_ner_stripped,
-        Augmentation.descriptions_codiesp_cie: process_codiesp_labels,
-    }
+        "sentence": codiesp.process_sentence,
+        "labels": codiesp.process_labels,
+        "cluster_assigner": codiesp.cluster_assigner,
+        Augmentation.ner_sentence: codiesp.process_ner_sentences,
+        Augmentation.ner_mention: codiesp.process_ner_mentions,
+        Augmentation.ner_stripped: codiesp.process_ner_stripped,
+        Augmentation.descriptions_labels: codiesp.process_labels,
+    },
+    "livingner": {
+        "sentence": livingner.process_sentence,
+        "labels": livingner.process_labels,
+        "cluster_assigner": livingner.cluster_assigner,
+        Augmentation.ner_sentence: livingner.process_ner_sentences,
+        Augmentation.ner_mention: livingner.process_ner_mentions,
+        Augmentation.ner_stripped: livingner.process_ner_stripped,
+    },
 }
