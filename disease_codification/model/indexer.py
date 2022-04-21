@@ -9,27 +9,21 @@ from disease_codification.custom_io import create_dir_if_dont_exist, save_as_pic
 from disease_codification.process_dataset.mapper import Augmentation, mapper_process_function
 
 
-class ClusteringType(Enum):
-    first_letter = "first_letter"
-    cie10 = "cie10"
-
-
 class Indexer:
     def __init__(
         self,
         corpus: str,
         corpuses_path: Path,
         indexers_path: Path,
-        clustering_type: ClusteringType = ClusteringType.cie10,
-        augmentation_matcher: List[Augmentation] = [Augmentation.descriptions_codiesp_cie, Augmentation.ner_sentence],
+        augmentation_matcher: List[Augmentation] = [Augmentation.descriptions_labels, Augmentation.ner_sentence],
         augmentation_ranker: List[Augmentation] = [
-            Augmentation.descriptions_codiesp_cie,
+            Augmentation.descriptions_labels,
             Augmentation.ner_sentence,
             Augmentation.ner_stripped,
             Augmentation.ner_mention,
         ],
         augmentation_corpus: List[Augmentation] = [
-            Augmentation.descriptions_codiesp_cie,
+            Augmentation.descriptions_labels,
             Augmentation.ner_sentence,
             Augmentation.ner_stripped,
             Augmentation.ner_mention,
@@ -39,7 +33,6 @@ class Indexer:
         self.corpus = corpus
         self.corpuses_path = corpuses_path
         self.indexer_path = indexers_path / corpus
-        self.clustering_type = clustering_type
         self.augmentation_matcher = augmentation_matcher
         self.augmentation_ranker = augmentation_ranker
         self.augmentation_corpus = augmentation_corpus
@@ -81,11 +74,11 @@ class Indexer:
         print(f"Final shape: {len(self.all_labels)}")
 
     def __clusterize__(self) -> Dict[str, str]:
-        if self.clustering_type == ClusteringType.first_letter:
-            mappings = {label: label[0] for label in self.all_labels}
-        elif self.clustering_type == ClusteringType.cie10:
-            clusters_assigned = cluster_assigner(self.all_labels)
-            mappings = dict(zip(self.all_labels, clusters_assigned))
+        clusters_assigned = mapper_process_function[self.corpus]["cluster_assigner"](
+            self.corpuses_path, self.all_labels
+        )
+        mappings = dict(zip(self.all_labels, clusters_assigned))
+        print(mappings)
         return mappings
 
     def __create_corpus__(self):
@@ -121,7 +114,8 @@ class Indexer:
         labels = list({self.mappings_label_to_cluster[l] for l in ls})
         not_found_labels = [i for i, l in enumerate(labels) if not l]
         if not_found_labels:
-            print(f"Labels not found: {[ls[i] for i in not_found_labels]}")
+            # print(f"Labels not found: {[ls[i] for i in not_found_labels]}")
+            pass
         return labels
 
     def __is_in_cluster__(self, cluster, clusters):
@@ -141,6 +135,9 @@ class Indexer:
     def __create_augmentation_corpora__(self):
         print("Matcher")
         for aug in self.augmentation_matcher:
+            if aug not in mapper_process_function[self.corpus]:
+                print(f"{aug} not implemented")
+                continue
             print(aug)
             df = mapper_process_function[self.corpus][aug](self.corpuses_path)
             sentences = df["sentence"].to_list()
@@ -153,6 +150,9 @@ class Indexer:
         print("Ranker")
         for aug in self.augmentation_ranker:
             print(aug)
+            if aug not in mapper_process_function[self.corpus]:
+                print(f"{aug} not implemented")
+                continue
             df = mapper_process_function[self.corpus][aug](self.corpuses_path)
             for cluster in self.clusters:
                 cluster_sentences = [
@@ -172,6 +172,9 @@ class Indexer:
                 )
         print("Corpus")
         for aug in self.augmentation_corpus:
+            if aug not in mapper_process_function[self.corpus]:
+                print(f"{aug} not implemented")
+                continue
             print(aug)
             df = mapper_process_function[self.corpus][aug](self.corpuses_path)
             write_fasttext_file(
@@ -179,41 +182,3 @@ class Indexer:
                 df["labels"].to_list(),
                 self.indexer_path / f"corpus-{aug}" / f"corpus_train.txt",
             )
-
-
-clusters = {
-    "a00-b99": "Ciertas enfermedades infecciosas y parasitarias",
-    "c00-d49": "Tumores [neoplasias]",
-    "d50-d89": "Enfermedades de la sangre y de los órganos hematopoyéticos, y ciertos trastornos que afectan el mecanismo de la inmunidad",
-    "e00-e89": "Enfermedades endocrinas, nutricionales y metabolicas",
-    "f00-f99": "Trastornos mentales y del comportamiento",
-    "g00-g99": "Enfermedades del sistema nervioso",
-    "h00-h59": "Enfermedades del ojo y sus anexos",
-    "h60-h95": "Enfermedades del oído y de la apófisis mastoides",
-    "i00-i99": "Enfermedades del sistema circulatorio",
-    "j00-j99": "Enfermedades del sistema respiratorio",
-    "k00-k95": "Enfermedades del sistema digestivo",
-    "l00-l99": "Enfermedades de la piel y del tejido subcutáneo",
-    "m00-m99": "Enfermedades del sistema osteomuscular y del tejido conjuntivo",
-    "n00-n99": "Enfermedades del sistema genitourinario",
-    "o00-o9a": "Embarazo, parto y puerperio",
-    "p00-p96": "Ciertas afecciones originadas en el período perinatal",
-    "q00-q99": "Malformaciones congénitas, deformidades y anomalías cromosómicas",
-    "r00-r99": " Síntomas, signos y hallazgos anormales clínicos y de laboratorio, no clasificados en otra parte",
-    "s00-t88": "Traumatismos, envenenamientos y algunas otras consecuencias de causas externas",
-    "v00-y99": "Causas externas de morbilidad y de mortalidad",
-    "z00-z99": "Factores que influyen en el estado de salud y contacto con los servicios de salud",
-}
-
-
-def cluster_assigner(labels: List[str]):
-    clusters_assigned = [assign_label(label) for label in labels]
-    assert len(labels) == len(clusters_assigned)
-    return clusters_assigned
-
-
-def assign_label(label):
-    category = label[:3]
-    for cluster in clusters:
-        if cluster.split("-")[0] <= category <= cluster.split("-")[1]:
-            return cluster
