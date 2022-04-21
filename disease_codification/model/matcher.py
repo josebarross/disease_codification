@@ -2,20 +2,18 @@ from collections import defaultdict
 from pathlib import Path
 from typing import List
 
-import numpy as np
 from disease_codification.custom_io import create_dir_if_dont_exist, load_pickle, write_fasttext_file
 from disease_codification.flair_utils import (
     CustomMultiCorpus,
     get_label_value,
+    read_augmentation_corpora,
     read_corpus,
     train_transformer_classifier,
 )
 from disease_codification.gcp import download_blob_file, upload_blob_file
-from flair.models import TextClassifier
-from sklearn.metrics import average_precision_score
-
 from disease_codification.metrics import Metrics, calculate_mean_average_precision, calculate_summary
-from disease_codification.process_dataset.mapper import Augmentation
+from disease_codification.process_dataset.mapper import Augmentation, mapper_process_function
+from flair.models import TextClassifier
 
 
 class Matcher:
@@ -55,7 +53,7 @@ class Matcher:
         upload_to_gcp: bool = False,
         augmentation: List[Augmentation] = [
             Augmentation.ner_sentence,
-            Augmentation.descriptions_codiesp_cie,
+            Augmentation.descriptions_labels,
         ],
         max_epochs: int = 15,
         mini_batch_size: int = 10,
@@ -67,10 +65,9 @@ class Matcher:
     ):
         print(f"Finetuning for {self.indexer}")
         corpus = read_corpus(self.indexers_path / self.indexer / "matcher", "matcher")
-        corpora = [corpus]
-        for aug in augmentation:
-            aug = read_corpus(self.indexers_path / self.indexer / f"matcher-{aug}", "matcher", only_train=True)
-            corpora.append(aug)
+        corpora = [corpus] + read_augmentation_corpora(
+            augmentation, self.indexers_path, self.indexer, "matcher", "matcher"
+        )
         multi_corpus = CustomMultiCorpus(corpora)
         filepath = f"{self.indexer}/matcher"
         self.classifier = train_transformer_classifier(

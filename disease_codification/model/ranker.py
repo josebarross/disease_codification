@@ -4,10 +4,10 @@ from typing import Dict, List
 
 import numpy as np
 from disease_codification.custom_io import create_dir_if_dont_exist, load_pickle, save_as_pickle
-from disease_codification.flair_utils import read_corpus
+from disease_codification.flair_utils import read_augmentation_corpora, read_corpus
 from disease_codification.gcp import download_blob_file, upload_blob_file
 from disease_codification.metrics import Metrics
-from disease_codification.process_dataset.mapper import Augmentation
+from disease_codification.process_dataset.mapper import Augmentation, mapper_process_function
 from disease_codification.utils import chunks
 from flair.data import MultiCorpus, Sentence
 from flair.embeddings import TransformerDocumentEmbeddings
@@ -86,9 +86,7 @@ class Ranker:
         if use_incorrect_matcher_predictions and incorrect_matcher_path.exists():
             incorrect_matcher_corpus = read_corpus(incorrect_matcher_path, f"incorrect_{cluster}", only_train=True)
             corpora.append(incorrect_matcher_corpus)
-        for aug in augmentation:
-            aug = read_corpus(self.indexers_path / self.indexer / f"ranker-{aug}", cluster, only_train=True)
-            corpora.append(aug)
+        corpora += read_augmentation_corpora(augmentation, self.indexers_path, self.indexer, "ranker", cluster)
         multi_corpus = MultiCorpus(corpora)
         sentences = []
         for split_type in split_types:
@@ -139,7 +137,7 @@ class Ranker:
             Augmentation.ner_mention,
             Augmentation.ner_sentence,
             Augmentation.ner_stripped,
-            Augmentation.descriptions_codiesp_cie,
+            Augmentation.descriptions_labels,
         ],
         use_incorrect_matcher_predictions: bool = False,
         subset: int = 0,
@@ -183,7 +181,9 @@ class Ranker:
                         if pred:
                             sentence.add_label("ranker", classes[i], 1.0)
 
-    def eval_weighted(self, split_types: List[str] = ["test"], eval_weighted_metrics: List[Metrics] = [Metrics.map]):
+    def eval_weighted(
+        self, split_types: List[str] = ["test"], eval_weighted_metrics: List[Metrics] = [Metrics.map, Metrics.summary]
+    ):
         for metric in eval_weighted_metrics:
             print(f"Calculating {metric} weighted for {split_types}")
             metric_clusters = {}

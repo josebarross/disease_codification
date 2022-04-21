@@ -9,20 +9,40 @@ from flair.models import TextClassifier
 from flair.trainers import ModelTrainer
 from disease_codification.custom_io import create_dir_if_dont_exist
 from disease_codification.gcp import download_blob_file
+from disease_codification.process_dataset.mapper import Augmentation, mapper_process_function
 
 
 def read_corpus(data_folder: Path, filename: str, only_train: bool = False):
-    if only_train:
+    try:
+        if only_train:
+            return ClassificationCorpus(
+                data_folder, train_file=f"{filename}_train.txt", label_type="gold", sample_missing_splits=False
+            )
         return ClassificationCorpus(
-            data_folder, train_file=f"{filename}_train.txt", label_type="gold", sample_missing_splits=False
+            data_folder,
+            test_file=f"{filename}_test.txt",
+            dev_file=f"{filename}_dev.txt",
+            train_file=f"{filename}_train.txt",
+            label_type="gold",
         )
-    return ClassificationCorpus(
-        data_folder,
-        test_file=f"{filename}_test.txt",
-        dev_file=f"{filename}_dev.txt",
-        train_file=f"{filename}_train.txt",
-        label_type="gold",
-    )
+    except RuntimeError as e:
+        print(e)
+        print(f"Error loading data from {data_folder}/{filename}. only_train={only_train}")
+        return None
+
+
+def read_augmentation_corpora(
+    augmentation: List[Augmentation], indexers_path: Path, indexer: str, caller: str, filename: str
+):
+    corpora = []
+    for aug in augmentation:
+        if not mapper_process_function[indexer].get(aug):
+            print(f"Augmentation {aug} not implemented")
+            continue
+        aug = read_corpus(indexers_path / indexer / f"{caller}-{aug}", filename, only_train=True)
+        if aug:
+            corpora.append(aug)
+    return corpora
 
 
 def train_transformer_classifier(
