@@ -55,8 +55,8 @@ def download_mesinesp_corpus(corpuses_path: Path):
     url = "https://zenodo.org/record/4707104/files/DeCS2020.tsv?download=1"
     download_corpus(corpuses_path, "decs-codes", url, file_type="tsv")
     print("Downloading DECS Codes Hierarchy")
-    url = "https://zenodo.org/record/4707104/files/DeCS2020.obo?download=1"
-    download_corpus(corpuses_path, "decs-hierarchy", url, file_type="obo")
+    url = "https://nlmpubs.nlm.nih.gov/projects/mesh/MESH_FILES/xmlmesh/desc2022.zip"
+    download_corpus(corpuses_path, "desc2022", url)
 
 
 def download_corpus(
