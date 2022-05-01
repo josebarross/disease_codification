@@ -1,4 +1,4 @@
-from disease_codification.process_dataset import codiesp, livingner, cantemist, falp
+from disease_codification.process_dataset import codiesp, livingner, cantemist, falp, mesinesp_st1
 from enum import Enum
 
 
@@ -44,5 +44,10 @@ mapper_process_function = {
         Augmentation.ner_sentence: falp.process_ner_sentences,
         Augmentation.ner_stripped: falp.process_ner_stripped,
         Augmentation.descriptions_labels: falp.process_labels,
+    },
+    "mesinesp_st1": {
+        "sentence": mesinesp_st1.process_sentence,
+        "labels": mesinesp_st1.process_labels,
+        "cluster_assigner": mesinesp_st1.cluster_assigner,
     },
 }
