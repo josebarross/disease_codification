@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import List
 
-from disease_codification.custom_io import create_dir_if_dont_exist, load_pickle, save_as_pickle
+from disease_codification.custom_io import create_dir_if_dont_exist, load_mappings, load_pickle, save_as_pickle
 from disease_codification.flair_utils import read_corpus
 from disease_codification.gcp import download_blob_file, upload_blob_file
 from flair.data import Sentence, MultiCorpus
@@ -21,7 +21,7 @@ class OVA:
         self.indexer = indexer
         self.classifier = classifier
         self.label_binarizer = label_binarizer
-        self.mappings = load_pickle(self.indexers_path / self.indexer / "mappings.pickle")
+        self.mappings, self.clusters, self.multi_cluster = load_mappings(indexers_path, indexer)
         OVA.create_directories(models_path, indexer)
 
     @classmethod

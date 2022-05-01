@@ -1,8 +1,9 @@
 from collections import defaultdict
+import itertools
 from pathlib import Path
 from typing import List
 
-from disease_codification.custom_io import create_dir_if_dont_exist, load_pickle, write_fasttext_file
+from disease_codification.custom_io import create_dir_if_dont_exist, load_mappings, load_pickle, write_fasttext_file
 from disease_codification.flair_utils import (
     CustomMultiCorpus,
     get_label_value,
@@ -23,7 +24,7 @@ class Matcher:
         self.indexer = indexer
         self.models_path = models_path
         self.classifier = classifier
-        self.mappings = load_pickle(self.indexers_path / self.indexer / "mappings.pickle")
+        self.mappings, self.clusters, self.multi_cluster = load_mappings(indexers_path, indexer)
         Matcher.create_directories(models_path, indexer)
 
     @classmethod
@@ -101,15 +102,17 @@ class Matcher:
         for metric in eval_metrics:
             if metric == Metrics.map:
                 self.predict(sentences, return_probabilities=True)
-                calculate_mean_average_precision(
-                    sentences, self.mappings.values(), label_name_predicted="matcher_proba"
+                labels_list = (
+                    itertools.chain.from_iterable(self.mappings.values())
+                    if self.multi_cluster
+                    else self.mappings.values()
                 )
+                calculate_mean_average_precision(sentences, labels_list, label_name_predicted="matcher_proba")
             elif metric == Metrics.summary:
                 self.predict(sentences, return_probabilities=False)
-                calculate_summary(sentences, self.mappings.values(), label_name_predicted="matcher")
+                calculate_summary(sentences, labels_list, label_name_predicted="matcher")
 
     def create_corpus_of_incorrectly_predicted(self):
-        mappings = load_pickle(self.indexers_path / self.indexer / "mappings.pickle")
         corpus = read_corpus(self.indexers_path / self.indexer / "corpus", "corpus")
         sentences = [sentence for sentence in corpus.dev]
         self.predict(sentences, return_probabilities=False)
@@ -119,7 +122,9 @@ class Matcher:
                 if get_label_value(label) == "unk":
                     continue
                 cluster_predicted = get_label_value(label)
-                clusters_gold = {mappings[get_label_value(ll)] for ll in sentence.get_labels("gold")}
+                clusters_gold = [self.mappings[get_label_value(ll)] for ll in sentence.get_labels("gold")]
+                if self.multi_cluster:
+                    clusters_gold = itertools.chain.from_iterable(clusters_gold)
                 if cluster_predicted not in clusters_gold:
                     sentences_incorrect[cluster_predicted].append(sentence.to_original_text())
         for cluster in sentences_incorrect.keys():

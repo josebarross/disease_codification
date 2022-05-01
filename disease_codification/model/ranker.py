@@ -1,14 +1,15 @@
+import itertools
 import statistics
 from pathlib import Path
 from typing import Dict, List
 
 import numpy as np
-from disease_codification.custom_io import create_dir_if_dont_exist, load_pickle, save_as_pickle
+from disease_codification.custom_io import create_dir_if_dont_exist, load_mappings, load_pickle, save_as_pickle
 from disease_codification.flair_utils import read_augmentation_corpora, read_corpus
 from disease_codification.gcp import download_blob_file, upload_blob_file
 from disease_codification.metrics import Metrics
-from disease_codification.process_dataset.mapper import Augmentation, mapper_process_function
-from disease_codification.utils import chunks
+from disease_codification.process_dataset.mapper import Augmentation
+from disease_codification.utils import chunks, label_in_cluster
 from flair.data import MultiCorpus, Sentence
 from flair.embeddings import TransformerDocumentEmbeddings
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -34,8 +35,7 @@ class Ranker:
         self.cluster_classifier: Dict[str, OneVsRestClassifier] = cluster_classifier
         self.cluster_label_binarizer: Dict[str, MultiLabelBinarizer] = cluster_label_binarizer
         self.cluster_tfidf = cluster_tfidf
-        self.mappings: Dict[str, str] = load_pickle(self.indexers_path / self.indexer / "mappings.pickle")
-        self.clusters: List[str] = set(self.mappings.values())
+        self.mappings, self.clusters, self.multi_cluster = load_mappings(self.indexers_path, self.indexer)
         self.transformer_for_embedding = None
         Ranker.create_directories(models_path, indexer)
 
@@ -47,7 +47,7 @@ class Ranker:
     @classmethod
     def load(cls, indexers_path: Path, models_path: Path, indexer: str, load_from_gcp: bool = False):
         cls.create_directories(models_path, indexer)
-        clusters = set(load_pickle(indexers_path / indexer / "mappings.pickle").values())
+        _, clusters, _ = load_mappings(indexers_path, indexer)
         cluster_classifier = {}
         cluster_label_binarizer = {}
         cluster_tfidf = {}
@@ -98,7 +98,11 @@ class Ranker:
 
     def _set_multi_label_binarizer(self, cluster: str):
         mlb = MultiLabelBinarizer()
-        labels_cluster = {f"<{label}>" for label, cluster_label in self.mappings.items() if cluster_label == cluster}
+        labels_cluster = {
+            f"<{label}>"
+            for label in self.mappings.keys()
+            if label_in_cluster(cluster, label, self.mappings, self.multi_cluster)
+        }
         mlb.fit([list(labels_cluster) + ["<incorrect-matcher>"]])
         self.cluster_label_binarizer[cluster] = mlb
 

@@ -1,6 +1,8 @@
 from pathlib import Path
 from typing import List
-from disease_codification.custom_io import load_pickle
+
+from matplotlib.pyplot import get_figlabels
+from disease_codification.custom_io import load_mappings
 from disease_codification.flair_utils import get_label_value, read_corpus
 from disease_codification.metrics import Metrics, calculate_mean_average_precision, calculate_summary
 from disease_codification.model.matcher import Matcher
@@ -18,7 +20,7 @@ class XOVA:
         self.indexer = indexer
         self.ranker = ranker or Ranker(indexers_path, models_path, indexer)
         self.matcher = matcher or Matcher(indexers_path, models_path, indexer)
-        self.mappings = load_pickle(self.indexers_path / self.indexer / "mappings.pickle")
+        self.mappings, self.clusters, self.multi_cluster = load_mappings(indexers_path, indexer)
 
     @classmethod
     def load(
@@ -72,8 +74,16 @@ class XOVA:
             for label in ranker:
                 if label.value == "<incorrect-matcher>":
                     continue
-                cluster = self.mappings[get_label_value(label)]
-                score = next(l.score for l in matcher if cluster == get_label_value(l)) * label.score
+                if self.multi_cluster:
+                    max_score = 0
+                    for cluster in self.mappings[get_label_value(label)]:
+                        score = next(l.score for l in matcher if cluster == get_label_value(l)) * label.score
+                        if score > max_score:
+                            max_score = score
+                    score = max_score
+                else:
+                    cluster = self.mappings[get_label_value(label)]
+                    score = next(l.score for l in matcher if cluster == get_label_value(l)) * label.score
                 sentence.add_label("label_predicted_proba", label.value, score)
 
     def predict_only_matched_clusters(self, sentences: List[Sentence]):
@@ -83,7 +93,11 @@ class XOVA:
             for label_ranker in ranker_predictions:
                 if label_ranker.value == "<incorrect-matcher>":
                     continue
-                if self.mappings[get_label_value(label_ranker)] in matcher_predictions:
+                if self.multi_cluster and any(
+                    c in matcher_predictions for c in self.mappings[get_label_value(label_ranker)]
+                ):
+                    sentence.add_label("label_predicted", label_ranker.value, 1.0)
+                elif self.mappings[get_label_value(label_ranker)] in matcher_predictions:
                     sentence.add_label("label_predicted", label_ranker.value, 1.0)
 
     def eval(self, eval_metrics: List[Metrics] = [Metrics.summary, Metrics.map], first_n_digits_summary: int = 0):

@@ -29,6 +29,7 @@ class Indexer:
             Augmentation.ner_mention,
         ],
         subset: int = None,
+        multi_cluster: bool = False,
     ):
         self.corpus = corpus
         self.corpuses_path = corpuses_path
@@ -38,6 +39,7 @@ class Indexer:
         self.augmentation_corpus = augmentation_corpus
         self.df_sentences = mapper_process_function[corpus]["sentence"](corpuses_path)
         self.df_labels = mapper_process_function[corpus]["labels"](corpuses_path, for_augmentation=False)
+        self.multi_cluster = multi_cluster
         self.__create_paths__()
         if subset:
             self.df_sentences = self.df_sentences[:subset]
@@ -58,7 +60,10 @@ class Indexer:
         print("Creating corpuses for use by models")
         self.__filter_labels_only_in_dataset__()
         self.mappings_label_to_cluster = self.__clusterize__()
-        self.clusters = set(self.mappings_label_to_cluster.values())
+        if self.multi_cluster:
+            self.clusters = set(itertools.chain.from_iterable(self.mappings_label_to_cluster.values()))
+        else:
+            self.clusters = set(self.mappings_label_to_cluster.values())
         save_as_pickle(self.mappings_label_to_cluster, self.indexer_path / "mappings.pickle")
         self.__create_corpus__()
         self.__create_matcher_corpus__()
@@ -96,7 +101,9 @@ class Indexer:
             write_fasttext_file(sentences, labels, self.indexer_path / "matcher" / f"matcher_{split_type}.txt")
 
     def __create_ranker_corpus__(self):
-        self.df_sentences["clusters"] = self.df_sentences["labels"].apply(self.__labels_to_clusters__)
+        self.df_sentences["clusters"] = [
+            self.__labels_to_clusters__(ls) for ls in self.df_sentences["labels"].to_list()
+        ]
         for cluster in self.clusters:
             is_in_cluster = self.df_sentences["clusters"].apply(partial(self.__is_in_cluster__, cluster))
             df_cluster = self.df_sentences[is_in_cluster]
@@ -105,18 +112,21 @@ class Indexer:
                 sentences = df_split_type["sentence"].tolist()
                 labels = []
                 for ls in df_split_type["labels"].to_list():
-                    labels.append([label for label in ls if self.mappings_label_to_cluster[label] == cluster])
+                    ls_parsed = (
+                        [l for l in ls if cluster in self.mappings_label_to_cluster[l]]
+                        if self.multi_cluster
+                        else [label for label in ls if self.mappings_label_to_cluster[label] == cluster]
+                    )
+                    labels.append(ls_parsed)
                 write_fasttext_file(
                     sentences, labels, self.indexer_path / "ranker" / f"ranker_{cluster}_{split_type}.txt"
                 )
 
     def __labels_to_clusters__(self, ls):
-        labels = list({self.mappings_label_to_cluster[l] for l in ls})
-        not_found_labels = [i for i, l in enumerate(labels) if not l]
-        if not_found_labels:
-            # print(f"Labels not found: {[ls[i] for i in not_found_labels]}")
-            pass
-        return labels
+        if self.multi_cluster:
+            return set(itertools.chain.from_iterable(self.mappings_label_to_cluster[l] for l in ls))
+        else:
+            return {self.mappings_label_to_cluster[l] for l in ls}
 
     def __is_in_cluster__(self, cluster, clusters):
         return cluster in clusters
@@ -125,9 +135,12 @@ class Indexer:
         return label in ls
 
     def print_info_of_labels(self):
-        clusters = np.array(list(self.mappings_label_to_cluster.values()))
+        if self.multi_cluster:
+            clusters = np.array(list(itertools.chain.from_iterable(self.mappings_label_to_cluster.values())))
+        else:
+            clusters = np.array(list(self.mappings_label_to_cluster.values()))
+        print(f"Amount of labels: {len(self.mappings_label_to_cluster)}")
         unique, counts = np.unique(clusters, return_counts=True)
-        print(f"Amount of labels: {clusters.shape}")
         print(dict(zip(unique, counts)))
         print(f"Mean: {np.mean(counts)}")
         print(f"Std: {np.std(counts)}")

@@ -1,3 +1,5 @@
+from ast import Dict
+import itertools
 import os
 from pathlib import Path
 import pickle
@@ -31,3 +33,21 @@ def create_dir_if_dont_exist(path: Path):
     if not path.exists():
         os.makedirs(f"{path}/")
     return path
+
+
+def load_mappings(indexers_path, indexer):
+    mappings: Dict[str, str] = load_pickle(indexers_path / indexer / "mappings.pickle")
+    multi_cluster = _is_mappings_multi_cluster(mappings)
+    if multi_cluster:
+        clusters: List[str] = set(itertools.chain.from_iterable(mappings.values()))
+    else:
+        clusters: List[str] = set(mappings.values())
+    return mappings, clusters, multi_cluster
+
+
+def _is_mappings_multi_cluster(mappings):
+    if all([type(m) == list for m in mappings.values()]):
+        return True
+    elif any([type(m) == list for m in mappings.values()]):
+        raise Exception
+    return False
