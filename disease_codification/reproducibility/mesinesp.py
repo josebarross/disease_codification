@@ -5,7 +5,7 @@ from disease_codification.model.indexer import Indexer
 from disease_codification.model.xova import XOVA
 
 
-def train_mesinesp_on_supercomputer(corpuses_path: Path, indexers_path: Path, models_path: Path):
+def train_mesinesp_on_supercomputer(corpuses_path: Path, indexers_path: Path, models_path: Path, matcher_train_args):
     print("Testing uploading to gcp")
     upload_blob("Hola", "testing.pickle")
     download_mesinesp_corpus(corpuses_path)
@@ -13,5 +13,5 @@ def train_mesinesp_on_supercomputer(corpuses_path: Path, indexers_path: Path, mo
     indexer = Indexer(corpus, corpuses_path, indexers_path, multi_cluster=True)
     indexer.create_corpuses()
     xova = XOVA(indexers_path, models_path, corpus)
-    xova.train(upload_matcher_to_gcp=True, upload_ranker_to_gcp=True)
+    xova.train(upload_matcher_to_gcp=True, upload_ranker_to_gcp=True, matcher_train_args=matcher_train_args)
     xova.eval()
