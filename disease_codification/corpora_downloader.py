@@ -1,7 +1,8 @@
-from pathlib import Path
-from venv import create
-import zipfile
 import shutil
+import zipfile
+from pathlib import Path
+
+import wget
 
 from disease_codification.custom_io import create_dir_if_dont_exist
 
@@ -65,21 +66,9 @@ def download_corpus(
     old_name: str = None,
     create_containing_folder: bool = False,
     file_type: str = "zip",
-    download_engine: str = "wget",
 ):
     if not Path(corpuses_path / f"{corpus_name}.{file_type}").is_file():
-        if download_engine == "curl":
-            import pycurl
-
-            c = pycurl.Curl()
-            c.setopt(c.URL, url)
-            with open(f"{corpus_name}.{file_type}", "w") as f:
-                c.setopt(c.WRITEFUNCTION, f.write)
-                c.perform()
-        else:
-            import wget
-
-            wget.download(url, f"{corpuses_path}/{corpus_name}.{file_type}")
+        wget.download(url, f"{corpuses_path}/{corpus_name}.{file_type}")
         path = corpuses_path
         if create_containing_folder:
             path = create_dir_if_dont_exist(corpuses_path / corpus_name)
