@@ -28,10 +28,9 @@ def process_sentence(corpuses_path: Path) -> pd.DataFrame:
             data = json.load(f)
             p_data = defaultdict(list)
             for row in data["articles"]:
-                p_data["sentence"].append(row["title"] + row["abstractText"])
-                for label in row.get("decsCodes", []):
-                    assert label.startswith("D")
-                p_data["labels"].append(row.get("decsCodes", []))
+                if row.get("decsCodes"):
+                    p_data["sentence"].append(row["title"] + row["abstractText"])
+                    p_data["labels"].append(row["decsCodes"])
             df_split_type = pd.DataFrame(data=p_data)
             df_split_type["split_type"] = [split_type] * df_split_type.shape[0]
             df = pd.concat([df, df_split_type])
