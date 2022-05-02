@@ -153,13 +153,13 @@ class Ranker:
         len_clusters = len(self.clusters)
         for i, cluster in enumerate(self.clusters):
             print(f"Training for cluster {cluster} - {i}/{len_clusters}")
+            self._set_multi_label_binarizer(cluster)
             sentences = self._read_sentences(
                 cluster, split_types_train, augmentation, use_incorrect_matcher_predictions, subset
             )
             if not sentences:
                 print("Cluster has no sentences")
-                raise Exception
-            self._set_multi_label_binarizer(cluster)
+                continue
             self._set_tfidf(cluster, augmentation)
             embeddings = self._get_embeddings(cluster, sentences, transformer_for_embedding)
             labels = self._get_labels_matrix(cluster, sentences)
@@ -175,14 +175,20 @@ class Ranker:
         print("Predicting ranker")
         for cluster in self.clusters:
             print(cluster)
-            embeddings = self._get_embeddings(cluster, sentences)
-            if return_probabilities:
-                predictions = self.cluster_classifier[cluster].predict_proba(embeddings)
-                classes = self.cluster_label_binarizer[cluster].classes_
+            classes = self.cluster_label_binarizer[cluster].classes_
+            classifier = self.cluster_classifier.get(cluster)
+            if not classifier:
+                for sentence in sentences:
+                    for label in classes:
+                        sentence.add_label("ranker_proba", label, 0.0)
+            elif return_probabilities:
+                embeddings = self._get_embeddings(cluster, sentences)
+                predictions = classifier.predict_proba(embeddings)
                 for sentence, prediction in zip(sentences, predictions):
                     for i, label in enumerate(classes):
                         sentence.add_label("ranker_proba", label, prediction[i])
             else:
+                embeddings = self._get_embeddings(cluster, sentences)
                 predictions = self.cluster_classifier[cluster].predict(embeddings)
                 classes = self.cluster_label_binarizer[cluster].classes_
                 for sentence, prediction in zip(sentences, predictions):
@@ -201,16 +207,24 @@ class Ranker:
                     sentences = self._read_sentences(cluster, [split_type])
                     if not sentences:
                         continue
-                    embeddings = self._get_embeddings(cluster, sentences)
+                    classifier = self.cluster_classifier[cluster]
                     labels_matrix = self._get_labels_matrix(cluster, sentences)
                     if metric == Metrics.map:
-                        predictions = self.cluster_classifier[cluster].predict_proba(embeddings)
+                        if not classifier:
+                            predictions = np.zeros_like(labels_matrix[0])
+                        else:
+                            embeddings = self._get_embeddings(cluster, sentences)
+                            predictions = classifier.predict_proba(embeddings)
                         aps = []
                         for y_true, y_scores in zip(labels_matrix, predictions):
                             aps.append(average_precision_score(y_true, y_scores))
                             metric_clusters[cluster] = (statistics.mean(aps), embeddings.shape[0])
                     elif metric == Metrics.summary:
-                        predictions = self.cluster_classifier[cluster].predict(embeddings)
+                        if not classifier:
+                            predictions = np.zeros_like(labels_matrix[0])
+                        else:
+                            embeddings = self._get_embeddings(cluster, sentences)
+                            predictions = self.cluster_classifier[cluster].predict(embeddings)
                         metric_clusters[cluster] = (
                             f1_score(labels_matrix, predictions, average="micro"),
                             embeddings.shape[0],
