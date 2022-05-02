@@ -2,7 +2,6 @@ from pathlib import Path
 from venv import create
 import zipfile
 import shutil
-import wget
 
 from disease_codification.custom_io import create_dir_if_dont_exist
 
@@ -45,11 +44,8 @@ def download_falp_corpus(corpuses_path: Path):
 
 
 def download_mesinesp_corpus(corpuses_path: Path):
-    print("Downloading MESINESP subtrack 1 corpus")
-    url = "https://zenodo.org/record/4707104/files/Subtrack1-Scientific_Literature.zip?download=1"
-    download_corpus(corpuses_path, "mesinesp-st1", url, create_containing_folder=True)
     print("Downloading MESINESP subtrack 2 corpus")
-    url = "https://zenodo.org/record/4707104/files/Subtrack2-Clinical_Trials.zip?download=1"
+    url = "https://zenodo.org/record/5602914/files/Subtrack2-Clinical_Trials.zip?download=1"
     download_corpus(corpuses_path, "mesinesp-st2", url, create_containing_folder=True)
     print("Downloading DECS Codes")
     url = "https://zenodo.org/record/4707104/files/DeCS2020.tsv?download=1"
@@ -57,6 +53,9 @@ def download_mesinesp_corpus(corpuses_path: Path):
     print("Downloading DECS Codes Hierarchy")
     url = "https://nlmpubs.nlm.nih.gov/projects/mesh/MESH_FILES/xmlmesh/desc2022.zip"
     download_corpus(corpuses_path, "desc2022", url)
+    print("Downloading MESINESP subtrack 1 corpus")
+    url = "https://zenodo.org/record/5602914/files/Subtrack1-Scientific_Literature.zip?download=1"
+    download_corpus(corpuses_path, "mesinesp-st1", url, create_containing_folder=True)
 
 
 def download_corpus(
@@ -66,9 +65,21 @@ def download_corpus(
     old_name: str = None,
     create_containing_folder: bool = False,
     file_type: str = "zip",
+    download_engine: str = "wget",
 ):
     if not Path(corpuses_path / f"{corpus_name}.{file_type}").is_file():
-        wget.download(url, f"{corpuses_path}/{corpus_name}.{file_type}")
+        if download_engine == "curl":
+            import pycurl
+
+            c = pycurl.Curl()
+            c.setopt(c.URL, url)
+            with open(f"{corpus_name}.{file_type}", "w") as f:
+                c.setopt(c.WRITEFUNCTION, f.write)
+                c.perform()
+        else:
+            import wget
+
+            wget.download(url, f"{corpuses_path}/{corpus_name}.{file_type}")
         path = corpuses_path
         if create_containing_folder:
             path = create_dir_if_dont_exist(corpuses_path / corpus_name)
