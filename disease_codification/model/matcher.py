@@ -102,13 +102,11 @@ class Matcher:
             return
         print("Evaluation of Matcher")
         for metric in eval_metrics:
+            labels_list = (
+                itertools.chain.from_iterable(self.mappings.values()) if self.multi_cluster else self.mappings.values()
+            )
             if metric == Metrics.map:
                 self.predict(sentences, return_probabilities=True)
-                labels_list = (
-                    itertools.chain.from_iterable(self.mappings.values())
-                    if self.multi_cluster
-                    else self.mappings.values()
-                )
                 calculate_mean_average_precision(sentences, labels_list, label_name_predicted="matcher_proba")
             elif metric == Metrics.summary:
                 self.predict(sentences, return_probabilities=False)
