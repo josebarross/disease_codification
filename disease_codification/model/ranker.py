@@ -159,6 +159,8 @@ class Ranker:
             )
             if not sentences:
                 print("Cluster has no sentences")
+                self.cluster_tfidf[cluster] = None
+                self.cluster_classifier[cluster] = None
                 continue
             self._set_tfidf(cluster, augmentation)
             embeddings = self._get_embeddings(cluster, sentences, transformer_for_embedding)
@@ -207,11 +209,12 @@ class Ranker:
                     sentences = self._read_sentences(cluster, [split_type])
                     if not sentences:
                         continue
-                    classifier = self.cluster_classifier[cluster]
+                    classifier = self.cluster_classifier.get(cluster)
                     labels_matrix = self._get_labels_matrix(cluster, sentences)
                     if metric == Metrics.map:
                         if not classifier:
-                            predictions = np.zeros_like(labels_matrix[0])
+                            predictions = np.zeros_like(labels_matrix)
+                            print(predictions.shape)
                         else:
                             embeddings = self._get_embeddings(cluster, sentences)
                             predictions = classifier.predict_proba(embeddings)
@@ -221,7 +224,7 @@ class Ranker:
                             metric_clusters[cluster] = (statistics.mean(aps), embeddings.shape[0])
                     elif metric == Metrics.summary:
                         if not classifier:
-                            predictions = np.zeros_like(labels_matrix[0])
+                            predictions = np.zeros_like(labels_matrix)
                         else:
                             embeddings = self._get_embeddings(cluster, sentences)
                             predictions = self.cluster_classifier[cluster].predict(embeddings)

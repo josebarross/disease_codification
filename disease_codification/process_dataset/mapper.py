@@ -1,3 +1,4 @@
+from functools import partial
 from disease_codification.process_dataset import codiesp, livingner, cantemist, falp, mesinesp_st1, mesinesp_st2
 from enum import Enum
 
@@ -18,6 +19,15 @@ mapper_process_function = {
         Augmentation.ner_mention: codiesp.process_ner_mentions,
         Augmentation.ner_stripped: codiesp.process_ner_stripped,
         Augmentation.descriptions_labels: codiesp.process_labels,
+    },
+    "codiesp_procedures": {
+        "sentence": partial(codiesp.process_sentence, subtask="procedures"),
+        "labels": partial(codiesp.process_labels, subtask="procedures"),
+        "cluster_assigner": partial(codiesp.cluster_assigner, subtask="procedures"),
+        Augmentation.ner_sentence: partial(codiesp.process_ner_sentences, subtask="procedures"),
+        Augmentation.ner_mention: partial(codiesp.process_ner_mentions, subtask="procedures"),
+        Augmentation.ner_stripped: partial(codiesp.process_ner_stripped, subtask="procedures"),
+        Augmentation.descriptions_labels: partial(codiesp.process_labels, subtask="procedures"),
     },
     "livingner": {
         "sentence": livingner.process_sentence,

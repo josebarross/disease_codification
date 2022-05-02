@@ -6,11 +6,12 @@ from typing import List
 import pandas as pd
 
 
-def process_labels(corpuses_path: Path, for_augmentation=True) -> pd.DataFrame:
+def process_labels(corpuses_path: Path, for_augmentation=True, subtask="diagnostics") -> pd.DataFrame:
     corpus_path = corpuses_path / "codiesp_codes"
-    df_sentences = process_sentence(corpuses_path)
+    df_sentences = process_sentence(corpuses_path, subtask=subtask)
+    name = "codiesp-D_codes.tsv" if subtask == "diagnostics" else "codiesp-P_codes.tsv"
     df = pd.read_csv(
-        corpus_path / "codiesp-D_codes.tsv",
+        corpus_path / name,
         sep="\t",
         on_bad_lines="skip",
         header=None,
@@ -24,17 +25,19 @@ def process_labels(corpuses_path: Path, for_augmentation=True) -> pd.DataFrame:
     df = df[df["labels"].isin(sentences_labels)]
     if for_augmentation:
         df = df[df["sentence"] != "Sin descripcion"]
+        df = df.dropna(subset=["sentence"])
         df = df.drop_duplicates(["sentence", "labels"])
         df["labels"] = df["labels"].apply(lambda x: [x])
     return df.reset_index()
 
 
-def process_sentence(corpuses_path: Path) -> pd.DataFrame:
+def process_sentence(corpuses_path: Path, subtask="diagnostics") -> pd.DataFrame:
     corpus_path = corpuses_path / "codiesp"
     df = pd.DataFrame()
     for split_type in ["train", "test", "dev"]:
+        name = f"{split_type}D.tsv" if subtask == "diagnostics" else f"{split_type}P.tsv"
         df_split_type = pd.read_csv(
-            corpus_path / split_type / f"{split_type}D.tsv",
+            corpus_path / split_type / name,
             sep="\t",
             header=None,
             names=["filename", "labels"],
@@ -49,7 +52,7 @@ def process_sentence(corpuses_path: Path) -> pd.DataFrame:
     return df.reset_index()
 
 
-def process_ner_mentions(corpuses_path: Path, for_augmentation=True) -> pd.DataFrame:
+def process_ner_mentions(corpuses_path: Path, for_augmentation=True, subtask="diagnostics") -> pd.DataFrame:
     df = pd.DataFrame()
     for split_type in ["train", "dev"]:
         df_split_type = pd.read_csv(
@@ -59,7 +62,8 @@ def process_ner_mentions(corpuses_path: Path, for_augmentation=True) -> pd.DataF
             header=None,
             names=["document", "type", "labels", "sentence", "position"],
         )
-        df_split_type = df_split_type[df_split_type["type"] == "DIAGNOSTICO"]
+        type_of_mention = "DIAGNOSTICO" if subtask == "diagnostics" else "PROCEDIMIENTO"
+        df_split_type = df_split_type[df_split_type["type"] == type_of_mention]
         df = pd.concat([df, df_split_type])
     if for_augmentation:
         df = df.drop_duplicates(["sentence", "labels"])
@@ -67,10 +71,10 @@ def process_ner_mentions(corpuses_path: Path, for_augmentation=True) -> pd.DataF
     return df.reset_index()
 
 
-def process_ner_sentences(corpuses_path: Path) -> pd.DataFrame:
+def process_ner_sentences(corpuses_path: Path, subtask="diagnostics") -> pd.DataFrame:
     sentences_df = pd.DataFrame()
-    documents_df = process_sentence(corpuses_path)
-    ner_df = process_ner_mentions(corpuses_path, for_augmentation=False)
+    documents_df = process_sentence(corpuses_path, subtask=subtask)
+    ner_df = process_ner_mentions(corpuses_path, for_augmentation=False, subtask=subtask)
     sentences = []
     labels = []
     for _, row_documents in documents_df.iterrows():
@@ -97,7 +101,7 @@ def process_ner_sentences(corpuses_path: Path) -> pd.DataFrame:
     return sentences_df
 
 
-def process_ner_stripped(corpuses_path: Path) -> pd.DataFrame:
+def process_ner_stripped(corpuses_path: Path, subtask="diagnostics") -> pd.DataFrame:
     df = pd.DataFrame()
     for split_type in ["train", "dev"]:
         df_split_type = pd.read_csv(
@@ -107,7 +111,8 @@ def process_ner_stripped(corpuses_path: Path) -> pd.DataFrame:
             header=None,
             names=["document", "type", "labels", "sentence", "location"],
         )
-        df_split_type = df_split_type[df_split_type["type"] == "DIAGNOSTICO"]
+        type_of_mention = "DIAGNOSTICO" if subtask == "diagnostics" else "PROCEDIMIENTO"
+        df_split_type = df_split_type[df_split_type["type"] == type_of_mention]
         group = df_split_type.groupby("document")
         labels = group["labels"].apply(list)
         sentences = group["sentence"].apply(" ".join)
@@ -147,14 +152,17 @@ clusters = {
 }
 
 
-def cluster_assigner(corpuses_path: Path, labels: List[str]):
-    clusters_assigned = [assign_label(label) for label in labels]
+def cluster_assigner(corpuses_path: Path, labels: List[str], subtask="diagnostics"):
+    clusters_assigned = [assign_label(label, subtask=subtask) for label in labels]
     assert len(labels) == len(clusters_assigned)
     return clusters_assigned
 
 
-def assign_label(label):
-    category = label[:3]
-    for cluster in clusters:
-        if cluster.split("-")[0] <= category <= cluster.split("-")[1]:
-            return cluster
+def assign_label(label, subtask="diagnostics"):
+    if subtask == "diagnostics":
+        category = label[:3]
+        for cluster in clusters:
+            if cluster.split("-")[0] <= category <= cluster.split("-")[1]:
+                return cluster
+    else:
+        return label[:2] if label.startswith("0") or label.startswith("b") else label[0]
