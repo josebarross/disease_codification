@@ -59,9 +59,13 @@ class Ranker:
                 download_blob_file(f"{indexer}/ranker/label_binarizer_{cluster}.pickle", label_binarizer_path)
                 download_blob_file(f"{indexer}/ranker/classifier_{cluster}.pickle", classifier_path)
                 download_blob_file(f"{indexer}/ranker/tfidf_{cluster}.pickle", tfidf_path)
-            cluster_classifier[cluster] = load_pickle(classifier_path)
             cluster_label_binarizer[cluster] = load_pickle(label_binarizer_path)
-            cluster_tfidf[cluster] = load_pickle(tfidf_path)
+            try:
+                cluster_classifier[cluster] = load_pickle(classifier_path)
+                cluster_tfidf[cluster] = load_pickle(tfidf_path)
+            except FileNotFoundError:
+                cluster_classifier[cluster] = None
+                cluster_tfidf[cluster] = None
         return cls(
             indexers_path,
             models_path,

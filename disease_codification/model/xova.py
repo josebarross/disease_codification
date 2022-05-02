@@ -77,13 +77,19 @@ class XOVA:
                 if self.multi_cluster:
                     max_score = 0
                     for cluster in self.mappings[get_label_value(label)]:
-                        score = next(l.score for l in matcher if cluster == get_label_value(l)) * label.score
+                        try:
+                            score = next(l.score for l in matcher if cluster == get_label_value(l)) * label.score
+                        except StopIteration:
+                            score = 0.0
                         if score > max_score:
                             max_score = score
                     score = max_score
                 else:
                     cluster = self.mappings[get_label_value(label)]
-                    score = next(l.score for l in matcher if cluster == get_label_value(l)) * label.score
+                    try:
+                        score = next(l.score for l in matcher if cluster == get_label_value(l)) * label.score
+                    except StopIteration:
+                        score = 0.0
                 sentence.add_label("label_predicted_proba", label.value, score)
 
     def predict_only_matched_clusters(self, sentences: List[Sentence]):
