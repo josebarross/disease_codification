@@ -56,6 +56,7 @@ def train_transformer_classifier(
     train_with_dev: bool = True,
     layers="-1",
     transformer_name="PlanTL-GOB-ES/roberta-base-biomedical-es",
+    num_workers=2,
 ):
     create_dir_if_dont_exist(results_path)
     if downsample:
@@ -75,6 +76,7 @@ def train_transformer_classifier(
         mini_batch_size=mini_batch_size,
         max_epochs=max_epochs,
         train_with_dev=train_with_dev,
+        num_workers=num_workers,
     )
     if remove_after_running:
         shutil.rmtree(results_path)

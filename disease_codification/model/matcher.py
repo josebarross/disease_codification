@@ -63,6 +63,7 @@ class Matcher:
         train_with_dev: bool = True,
         layers="-1",
         transformer_name="PlanTL-GOB-ES/roberta-base-biomedical-es",
+        num_workers=2,
     ):
         print(f"Finetuning for {self.indexer}")
         corpus = read_corpus(self.indexers_path / self.indexer / "matcher", "matcher")
@@ -82,6 +83,7 @@ class Matcher:
             train_with_dev=train_with_dev,
             layers=layers,
             transformer_name=transformer_name,
+            num_workers=num_workers,
         )
         if upload_to_gcp:
             self.upload_to_gcp()
