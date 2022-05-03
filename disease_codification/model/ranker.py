@@ -154,6 +154,7 @@ class Ranker:
         use_incorrect_matcher_predictions: bool = False,
         subset: int = 0,
         transformer_for_embedding: str = None,
+        log_statistics_while_train: bool = True,
     ):
         len_clusters = len(self.clusters)
         for i, cluster in enumerate(self.clusters):
@@ -172,6 +173,9 @@ class Ranker:
             labels = self._get_labels_matrix(cluster, sentences)
 
             clf = OneVsRestClassifier(XGBClassifier(eval_metric="logloss")).fit(embeddings, labels)
+            if log_statistics_while_train:
+                logger.info(f'MAP: {self.eval_cluster(cluster, Metrics.map, "test")}')
+                logger.info(f'F1: {self.eval_cluster(cluster, Metrics.summary, "test")}')
             self.cluster_classifier[cluster] = clf
         logger.info("Training Complete")
         self.save()
@@ -211,38 +215,40 @@ class Ranker:
             metric_clusters = {}
             for split_type in split_types:
                 for cluster in self.clusters:
-                    sentences = self._read_sentences(cluster, [split_type])
-                    if not sentences:
-                        continue
-                    classifier = self.cluster_classifier.get(cluster)
-                    labels_matrix = self._get_labels_matrix(cluster, sentences)
-                    if metric == Metrics.map:
-                        if not classifier:
-                            predictions = np.zeros_like(labels_matrix)
-                            logger.info(predictions.shape)
-                        else:
-                            embeddings = self._get_embeddings(cluster, sentences)
-                            predictions = classifier.predict_proba(embeddings)
-                        aps = []
-                        for y_true, y_scores in zip(labels_matrix, predictions):
-                            aps.append(average_precision_score(y_true, y_scores))
-                            metric_clusters[cluster] = (statistics.mean(aps), embeddings.shape[0])
-                    elif metric == Metrics.summary:
-                        if not classifier:
-                            predictions = np.zeros_like(labels_matrix)
-                        else:
-                            embeddings = self._get_embeddings(cluster, sentences)
-                            predictions = self.cluster_classifier[cluster].predict(embeddings)
-                        metric_clusters[cluster] = (
-                            f1_score(labels_matrix, predictions, average="micro"),
-                            embeddings.shape[0],
-                        )
+                    result, weight = self.eval_cluster(cluster, metric, split_type)
+                    if result:
+                        metric_clusters[cluster] = (result, weight)
                 weighted_metric = sum(map_stat * d_points for map_stat, d_points in metric_clusters.values()) / sum(
                     d_points for _, d_points in metric_clusters.values()
                 )
             logger.info(metric)
             logger.info(metric_clusters)
             logger.info(weighted_metric)
+
+    def eval_cluster(self, cluster, metric, split_type):
+        sentences = self._read_sentences(cluster, [split_type])
+        if not sentences:
+            return None, None
+        classifier = self.cluster_classifier.get(cluster)
+        labels_matrix = self._get_labels_matrix(cluster, sentences)
+        if metric == Metrics.map:
+            if not classifier:
+                predictions = np.zeros_like(labels_matrix)
+                logger.info(predictions.shape)
+            else:
+                embeddings = self._get_embeddings(cluster, sentences)
+                predictions = classifier.predict_proba(embeddings)
+            aps = []
+            for y_true, y_scores in zip(labels_matrix, predictions):
+                aps.append(average_precision_score(y_true, y_scores))
+                return statistics.mean(aps), embeddings.shape[0]
+        elif metric == Metrics.summary:
+            if not classifier:
+                predictions = np.zeros_like(labels_matrix)
+            else:
+                embeddings = self._get_embeddings(cluster, sentences)
+                predictions = self.cluster_classifier[cluster].predict(embeddings)
+            return f1_score(labels_matrix, predictions, average="micro"), embeddings.shape[0]
 
     def save(self):
         logger.info("Saving model")
