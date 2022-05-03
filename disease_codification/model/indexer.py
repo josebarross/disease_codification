@@ -7,7 +7,7 @@ from typing import Dict, List
 import numpy as np
 from disease_codification.custom_io import create_dir_if_dont_exist, save_as_pickle, write_fasttext_file
 from disease_codification.process_dataset.mapper import Augmentation, mapper_process_function
-
+from disease_codification import logger
 
 class Indexer:
     def __init__(
@@ -57,7 +57,7 @@ class Indexer:
             create_dir_if_dont_exist(self.indexer_path / f"corpus-{aug}")
 
     def create_corpuses(self):
-        print("Creating corpuses for use by models")
+        logger.info("Creating corpuses for use by models")
         self.__filter_labels_only_in_dataset__()
         self.mappings_label_to_cluster = self.__clusterize__()
         if self.multi_cluster:
@@ -69,21 +69,21 @@ class Indexer:
         self.__create_matcher_corpus__()
         self.__create_ranker_corpus__()
         self.__create_augmentation_corpora__()
-        self.print_info_of_labels()
+        self.logger.info_info_of_labels()
 
     def __filter_labels_only_in_dataset__(self):
         labels_in_sentences = set(itertools.chain.from_iterable([ls for ls in self.df_sentences["labels"].to_list()]))
         labels_in_descriptions = self.df_labels["labels"].to_list()
-        print(f"Original shape: {len(labels_in_descriptions)}")
+        logger.info(f"Original shape: {len(labels_in_descriptions)}")
         self.all_labels = [label for label in labels_in_descriptions if label in labels_in_sentences]
-        print(f"Final shape: {len(self.all_labels)}")
+        logger.info(f"Final shape: {len(self.all_labels)}")
 
     def __clusterize__(self) -> Dict[str, str]:
         clusters_assigned = mapper_process_function[self.corpus]["cluster_assigner"](
             self.corpuses_path, self.all_labels
         )
         mappings = dict(zip(self.all_labels, clusters_assigned))
-        print(mappings)
+        logger.info(mappings)
         return mappings
 
     def __create_corpus__(self):
@@ -134,24 +134,24 @@ class Indexer:
     def __is_in_labels__(self, label, ls):
         return label in ls
 
-    def print_info_of_labels(self):
+    def logger.info_info_of_labels(self):
         if self.multi_cluster:
             clusters = np.array(list(itertools.chain.from_iterable(self.mappings_label_to_cluster.values())))
         else:
             clusters = np.array(list(self.mappings_label_to_cluster.values()))
-        print(f"Amount of labels: {len(self.mappings_label_to_cluster)}")
+        logger.info(f"Amount of labels: {len(self.mappings_label_to_cluster)}")
         unique, counts = np.unique(clusters, return_counts=True)
-        print(dict(zip(unique, counts)))
-        print(f"Mean: {np.mean(counts)}")
-        print(f"Std: {np.std(counts)}")
+        logger.info(dict(zip(unique, counts)))
+        logger.info(f"Mean: {np.mean(counts)}")
+        logger.info(f"Std: {np.std(counts)}")
 
     def __create_augmentation_corpora__(self):
-        print("Matcher")
+        logger.info("Matcher")
         for aug in self.augmentation_matcher:
             if aug not in mapper_process_function[self.corpus]:
-                print(f"{aug} not implemented")
+                logger.info(f"{aug} not implemented")
                 continue
-            print(aug)
+            logger.info(aug)
             df = mapper_process_function[self.corpus][aug](self.corpuses_path)
             sentences = df["sentence"].to_list()
             labels = [self.__labels_to_clusters__(ls) for ls in df["labels"].to_list()]
@@ -160,11 +160,11 @@ class Indexer:
                 labels,
                 self.indexer_path / f"matcher-{aug}" / f"matcher_train.txt",
             )
-        print("Ranker")
+        logger.info("Ranker")
         for aug in self.augmentation_ranker:
-            print(aug)
+            logger.info(aug)
             if aug not in mapper_process_function[self.corpus]:
-                print(f"{aug} not implemented")
+                logger.info(f"{aug} not implemented")
                 continue
             df = mapper_process_function[self.corpus][aug](self.corpuses_path)
             for cluster in self.clusters:
@@ -183,12 +183,12 @@ class Indexer:
                     cluster_labels,
                     self.indexer_path / f"ranker-{aug}" / f"{cluster}_train.txt",
                 )
-        print("Corpus")
+        logger.info("Corpus")
         for aug in self.augmentation_corpus:
             if aug not in mapper_process_function[self.corpus]:
-                print(f"{aug} not implemented")
+                logger.info(f"{aug} not implemented")
                 continue
-            print(aug)
+            logger.info(aug)
             df = mapper_process_function[self.corpus][aug](self.corpuses_path)
             write_fasttext_file(
                 df["sentence"].to_list(),

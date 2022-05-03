@@ -5,6 +5,7 @@ from pathlib import Path
 import wget
 
 from disease_codification.custom_io import create_dir_if_dont_exist
+from disease_codification import logger
 
 
 def create_directories(data_path: Path):
@@ -15,46 +16,46 @@ def create_directories(data_path: Path):
 
 
 def download_codiesp_corpus(corpuses_path: Path):
-    print("Downloading codiesp corpus")
+    logger.info("Downloading codiesp corpus")
     url = "https://zenodo.org/record/3837305/files/codiesp.zip?download=1"
     download_corpus(corpuses_path, "codiesp", url, old_name="final_dataset_v4_to_publish")
-    print("Downloading codiesp labels")
+    logger.info("Downloading codiesp labels")
     url = "https://zenodo.org/record/3632523/files/codiesp_codes.zip?download=1"
     download_corpus(corpuses_path, "codiesp_codes", url, create_containing_folder=True)
 
 
 def download_livingner_corpus(corpuses_path: Path):
-    print("Downloading LIVINGNER corpus")
+    logger.info("Downloading LIVINGNER corpus")
     url = "https://zenodo.org/record/6421410/files/training_valid.zip?download=1"
     download_corpus(corpuses_path, "livingner", url, create_containing_folder=True)
 
 
 def download_cantemist_corpus(corpuses_path: Path):
-    print("Downloading CANTEMIST corpus")
+    logger.info("Downloading CANTEMIST corpus")
     url = "https://zenodo.org/record/3978041/files/cantemist.zip?download=1"
     download_corpus(corpuses_path, "cantemist", url, create_containing_folder=True)
-    print("Downloading CIE 3 O descriptions")
+    logger.info("Downloading CIE 3 O descriptions")
     url = "https://eciemaps.mscbs.gob.es/ecieMaps/download?name=2018_CIEO31_TABLA_%20REFERENCIA_con_6_7_caracteres_final_20180111_5375350050755186721_7033700654037542595.xlsx"
     download_corpus(corpuses_path, "cie-o-3-codes", url, file_type="xlsx")
 
 
 def download_falp_corpus(corpuses_path: Path):
-    print("Downloading FALP corpus")
+    logger.info("Downloading FALP corpus")
     url = "https://zenodo.org/record/5555432/files/corpus.zip?download=1"
     download_corpus(corpuses_path, "falp", url, create_containing_folder=True)
 
 
 def download_mesinesp_corpus(corpuses_path: Path):
-    print("Downloading MESINESP subtrack 2 corpus")
+    logger.info("Downloading MESINESP subtrack 2 corpus")
     url = "https://zenodo.org/record/5602914/files/Subtrack2-Clinical_Trials.zip?download=1"
     download_corpus(corpuses_path, "mesinesp-st2", url, create_containing_folder=True)
-    print("Downloading DECS Codes")
+    logger.info("Downloading DECS Codes")
     url = "https://zenodo.org/record/4707104/files/DeCS2020.tsv?download=1"
     download_corpus(corpuses_path, "decs-codes", url, file_type="tsv")
-    print("Downloading DECS Codes Hierarchy")
+    logger.info("Downloading DECS Codes Hierarchy")
     url = "https://nlmpubs.nlm.nih.gov/projects/mesh/MESH_FILES/xmlmesh/desc2022.zip"
     download_corpus(corpuses_path, "desc2022", url)
-    print("Downloading MESINESP subtrack 1 corpus")
+    logger.info("Downloading MESINESP subtrack 1 corpus")
     url = "https://zenodo.org/record/5602914/files/Subtrack1-Scientific_Literature.zip?download=1"
     download_corpus(corpuses_path, "mesinesp-st1", url, create_containing_folder=True)
 

@@ -9,6 +9,7 @@ from disease_codification.model.matcher import Matcher
 
 from disease_codification.model.ranker import Ranker
 from flair.data import Sentence
+from disease_codification import logger
 
 
 class XOVA:
@@ -67,7 +68,7 @@ class XOVA:
             self.predict_only_matched_clusters(sentences)
 
     def mix_with_probabilities(self, sentences: List[Sentence]):
-        print("Joining probabilities")
+        logger.info("Joining probabilities")
         for sentence in sentences:
             matcher = sentence.get_labels("matcher_proba")
             ranker = sentence.get_labels("ranker_proba")

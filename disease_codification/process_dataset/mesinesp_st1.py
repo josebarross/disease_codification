@@ -7,6 +7,7 @@ from xml.etree.ElementTree import ElementTree
 
 import pandas as pd
 from lxml import etree
+from disease_codification import logger
 
 
 def process_sentence(corpuses_path: Path) -> pd.DataFrame:
@@ -55,7 +56,7 @@ def cluster_assigner(corpuses_path: Path, labels: List[str]):
     mappings = {}
     for i, result in enumerate(query_result):
         if i % 100 == 0:
-            print(i, not_mesh, more_than_one_cluster)
+            logger.info(i, not_mesh, more_than_one_cluster)
         ui = result.find("DescriptorUI").text
         tree_locations = result.xpath("./TreeNumberList/TreeNumber/text()")
         if tree_locations:

@@ -9,6 +9,7 @@ from typing import List
 import pandas as pd
 
 from disease_codification.custom_io import load_pickle, save_as_pickle
+from disease_codification import logger
 
 
 def process_sentence(corpuses_path: Path) -> pd.DataFrame:
@@ -34,7 +35,7 @@ def get_split_types(corpuses_path: Path, df_sentence=None):
     if path.exists():
         return load_pickle(path)
     else:
-        print("Generating split_types")
+        logger.info("Generating split_types")
         split_types_dict = {}
         split_types = [
             "test" if n >= 90 else "dev" if n >= 80 else "train"
@@ -140,12 +141,12 @@ def process_ner_sentences(corpuses_path: Path) -> pd.DataFrame:
                         ).replace(" ", "")
                         labels_sentence.append(row_label["labels"][0])
                     except AssertionError:
-                        print(row_label, sentence)
+                        logger.info(row_label, sentence)
                         error_ner_sentences += 1
             if sentence:
                 sentences.append(sentence.strip())
                 labels.append(labels_sentence)
-    print(f"Error parsing {error_ner_sentences} mentions")
+    logger.info(f"Error parsing {error_ner_sentences} mentions")
     sentences_df["sentence"] = sentences
     sentences_df["labels"] = labels
     return sentences_df

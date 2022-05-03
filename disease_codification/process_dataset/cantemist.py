@@ -7,6 +7,7 @@ from typing import List
 from wsgiref.util import shift_path_info
 
 import pandas as pd
+from disease_codification import logger
 
 
 def process_labels(corpuses_path: Path, for_augmentation=True) -> pd.DataFrame:
@@ -59,8 +60,8 @@ def process_sentence(corpuses_path: Path) -> pd.DataFrame:
             if length > 512:
                 amount += 1
             sentences.append(sentence)
-        print("Documents with more than 512 tokens: ", amount)
-        print("Average length: ", statistics.mean(lens))
+        logger.info("Documents with more than 512 tokens: ", amount)
+        logger.info("Average length: ", statistics.mean(lens))
         df_split_type["sentence"] = sentences
         df_split_type["labels"] = df_split_type["code"]
         df = pd.concat([df, df_split_type])

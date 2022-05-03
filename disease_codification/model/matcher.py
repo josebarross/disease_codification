@@ -15,6 +15,7 @@ from disease_codification.gcp import download_blob_file, upload_blob_file
 from disease_codification.metrics import Metrics, calculate_mean_average_precision, calculate_summary
 from disease_codification.process_dataset.mapper import Augmentation, mapper_process_function
 from flair.models import TextClassifier
+from disease_codification import logger
 
 
 class Matcher:
@@ -65,7 +66,7 @@ class Matcher:
         transformer_name="PlanTL-GOB-ES/roberta-base-biomedical-es",
         num_workers=2,
     ):
-        print(f"Finetuning for {self.indexer}")
+        logger.info(f"Finetuning for {self.indexer}")
         corpus = read_corpus(self.indexers_path / self.indexer / "matcher", "matcher")
         corpora = [corpus] + read_augmentation_corpora(
             augmentation, self.indexers_path, self.indexer, "matcher", "matcher"
@@ -91,7 +92,7 @@ class Matcher:
         self.eval([s for s in corpus.test])
 
     def predict(self, sentences, return_probabilities=True):
-        print("Predicting matcher")
+        logger.info("Predicting matcher")
         label_name = "matcher_proba" if return_probabilities else "matcher"
         self.classifier.predict(
             sentences, label_name=label_name, return_probabilities_for_all_classes=return_probabilities
@@ -100,7 +101,7 @@ class Matcher:
     def eval(self, sentences, eval_metrics: List[Metrics] = [Metrics.map]):
         if not sentences:
             return
-        print("Evaluation of Matcher")
+        logger.info("Evaluation of Matcher")
         for metric in eval_metrics:
             labels_list = (
                 itertools.chain.from_iterable(self.mappings.values()) if self.multi_cluster else self.mappings.values()

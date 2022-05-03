@@ -12,6 +12,7 @@ from sklearn.preprocessing import MultiLabelBinarizer
 from xgboost import XGBClassifier
 
 from disease_codification.metrics import calculate_mean_average_precision
+from disease_codification import logger
 
 
 class OVA:
@@ -42,7 +43,7 @@ class OVA:
         return cls(indexers_path, models_path, indexer, classifier, label_binarizer)
 
     def save(self):
-        print("Saving model")
+        logger.info("Saving model")
         base_path = self.models_path / self.indexer / "ova"
         save_as_pickle(self.label_binarizer, base_path / f"label_binarizer.pickle")
         save_as_pickle(self.classifier, base_path / f"classifier.pickle")
@@ -67,7 +68,7 @@ class OVA:
         return labels_matrix
 
     def train(self, upload_to_gcp: bool = False, split_types_train=["train", "dev"]):
-        print(f"Training OVA")
+        logger.info(f"Training OVA")
         corpus = read_corpus(self.indexers_path / self.indexer / "corpus", "corpus")
         corpus_descriptions = read_corpus(self.indexers_path / self.indexer / "description", "corpus", only_train=True)
         multi_corpus = MultiCorpus([corpus, corpus_descriptions])
@@ -82,13 +83,13 @@ class OVA:
         pipe = Pipeline([("tfidf", TfidfVectorizer()), ("xgboost", XGBClassifier(eval_metric="logloss"))])
         clf = OneVsRestClassifier(pipe).fit(embeddings, labels)
         self.classifier = clf
-        print("Training Complete")
+        logger.info("Training Complete")
         self.save()
         if upload_to_gcp:
             self.upload_to_gcp()
 
     def predict(self, sentences):
-        print("Predicting for OVA")
+        logger.info("Predicting for OVA")
         embeddings = self._get_embeddings(sentences)
         predictions = self.classifier.predict_proba(embeddings)
         classes = self.label_binarizer.classes_
@@ -97,7 +98,7 @@ class OVA:
                 sentence.add_label("ova", label, prediction[i])
 
     def eval(self):
-        print("Eval OVA")
+        logger.info("Eval OVA")
         corpus = read_corpus(self.indexers_path / self.indexer / "corpus", "corpus")
         sentences = [s for s in corpus.test]
         self.predict(sentences)

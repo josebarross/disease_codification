@@ -17,6 +17,7 @@ from sklearn.metrics import average_precision_score, classification_report, f1_s
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.preprocessing import MultiLabelBinarizer
 from xgboost import XGBClassifier
+from disease_codification import logger
 
 
 class Ranker:
@@ -110,12 +111,12 @@ class Ranker:
         mlb.fit([list(labels_cluster) + ["<incorrect-matcher>"]])
         self.cluster_label_binarizer[cluster] = mlb
 
-    def _set_tfidf(self, cluster: str, augmentation: List[Augmentation]):
+    def _set_tfidf(self, cluster: str, sentences: List[str]):
+        logger.info("Fitting tf-idf")
         tfidf = TfidfVectorizer()
-        tfidf.fit(
-            s.to_original_text() for s in self._read_sentences(cluster, ["train", "dev"], augmentation=augmentation)
-        )
+        tfidf.fit(s.to_original_text() for s in sentences)
         self.cluster_tfidf[cluster] = tfidf
+        logger.info("Finished fitting tf-idf")
 
     def _get_labels_matrix(self, cluster: str, sentences: List[Sentence]):
         mlb = self.cluster_label_binarizer[cluster]
@@ -137,7 +138,7 @@ class Ranker:
                     sentence.embedding.to("cpu")
             transformer_embeddings = np.array([sentence.embedding.to("cpu").numpy() for sentence in sentences])
             embeddings = np.hstack((embeddings.toarray(), transformer_embeddings))
-        print("Got embeddings")
+        logger.info("Got embeddings")
         return embeddings
 
     def train(
@@ -156,13 +157,13 @@ class Ranker:
     ):
         len_clusters = len(self.clusters)
         for i, cluster in enumerate(self.clusters):
-            print(f"Training for cluster {cluster} - {i}/{len_clusters}")
+            logger.info(f"Training for cluster {cluster} - {i}/{len_clusters}")
             self._set_multi_label_binarizer(cluster)
             sentences = self._read_sentences(
                 cluster, split_types_train, augmentation, use_incorrect_matcher_predictions, subset
             )
             if not sentences:
-                print("Cluster has no sentences")
+                logger.info("Cluster has no sentences")
                 self.cluster_tfidf[cluster] = None
                 self.cluster_classifier[cluster] = None
                 continue
@@ -172,15 +173,15 @@ class Ranker:
 
             clf = OneVsRestClassifier(XGBClassifier(eval_metric="logloss")).fit(embeddings, labels)
             self.cluster_classifier[cluster] = clf
-        print("Training Complete")
+        logger.info("Training Complete")
         self.save()
         if upload_to_gcp:
             self.upload_to_gcp()
 
     def predict(self, sentences: List[Sentence], return_probabilities=True):
-        print("Predicting ranker")
+        logger.info("Predicting ranker")
         for cluster in self.clusters:
-            print(cluster)
+            logger.info(cluster)
             classes = self.cluster_label_binarizer[cluster].classes_
             classifier = self.cluster_classifier.get(cluster)
             if not classifier:
@@ -206,7 +207,7 @@ class Ranker:
         self, split_types: List[str] = ["test"], eval_weighted_metrics: List[Metrics] = [Metrics.map, Metrics.summary]
     ):
         for metric in eval_weighted_metrics:
-            print(f"Calculating {metric} weighted for {split_types}")
+            logger.info(f"Calculating {metric} weighted for {split_types}")
             metric_clusters = {}
             for split_type in split_types:
                 for cluster in self.clusters:
@@ -218,7 +219,7 @@ class Ranker:
                     if metric == Metrics.map:
                         if not classifier:
                             predictions = np.zeros_like(labels_matrix)
-                            print(predictions.shape)
+                            logger.info(predictions.shape)
                         else:
                             embeddings = self._get_embeddings(cluster, sentences)
                             predictions = classifier.predict_proba(embeddings)
@@ -239,12 +240,12 @@ class Ranker:
                 weighted_metric = sum(map_stat * d_points for map_stat, d_points in metric_clusters.values()) / sum(
                     d_points for _, d_points in metric_clusters.values()
                 )
-            print(metric)
-            print(metric_clusters)
-            print(weighted_metric)
+            logger.info(metric)
+            logger.info(metric_clusters)
+            logger.info(weighted_metric)
 
     def save(self):
-        print("Saving model")
+        logger.info("Saving model")
         base_path = self.models_path / self.indexer / "ranker"
         for cluster in self.clusters:
             save_as_pickle(self.cluster_label_binarizer[cluster], base_path / f"label_binarizer_{cluster}.pickle")

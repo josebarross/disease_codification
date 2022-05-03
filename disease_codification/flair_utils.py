@@ -10,6 +10,7 @@ from flair.trainers import ModelTrainer
 from disease_codification.custom_io import create_dir_if_dont_exist
 from disease_codification.gcp import download_blob_file
 from disease_codification.process_dataset.mapper import Augmentation, mapper_process_function
+from disease_codification import logger
 
 
 def read_corpus(data_folder: Path, filename: str, only_train: bool = False):
@@ -26,8 +27,8 @@ def read_corpus(data_folder: Path, filename: str, only_train: bool = False):
             label_type="gold",
         )
     except RuntimeError as e:
-        print(e)
-        print(f"Error loading data from {data_folder}/{filename}. only_train={only_train}")
+        logger.info(e)
+        logger.info(f"Error loading data from {data_folder}/{filename}. only_train={only_train}")
         return None
 
 
@@ -37,7 +38,7 @@ def read_augmentation_corpora(
     corpora = []
     for aug in augmentation:
         if not mapper_process_function[indexer].get(aug):
-            print(f"Augmentation {aug} not implemented")
+            logger.info(f"Augmentation {aug} not implemented")
             continue
         aug = read_corpus(indexers_path / indexer / f"{caller}-{aug}", filename, only_train=True)
         if aug:

@@ -3,10 +3,11 @@ from disease_codification.corpora_downloader import download_mesinesp_corpus
 from disease_codification.gcp import upload_blob
 from disease_codification.model.indexer import Indexer
 from disease_codification.model.xova import XOVA
+from disease_codification import logger
 
 
 def train_mesinesp_on_supercomputer(corpuses_path: Path, indexers_path: Path, models_path: Path, matcher_train_args):
-    print("Testing uploading to gcp")
+    logger.info("Testing uploading to gcp")
     upload_blob("Hola", "testing.pickle")
     download_mesinesp_corpus(corpuses_path)
     corpus = "mesinesp_st1"
