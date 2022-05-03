@@ -55,8 +55,6 @@ def cluster_assigner(corpuses_path: Path, labels: List[str]):
     query_result = tree.xpath(query)
     mappings = {}
     for i, result in enumerate(query_result):
-        if i % 100 == 0:
-            logger.info(i, not_mesh, more_than_one_cluster)
         ui = result.find("DescriptorUI").text
         tree_locations = result.xpath("./TreeNumberList/TreeNumber/text()")
         if tree_locations:

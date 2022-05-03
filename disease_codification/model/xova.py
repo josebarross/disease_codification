@@ -127,6 +127,7 @@ class XOVA:
                     self.mappings.keys(),
                     label_name_predicted="label_predicted",
                     first_n_digits=first_n_digits_summary,
+                    output_full=False,
                 )
                 calculate_mean_average_precision(
                     sentences, self.mappings.keys(), label_name_predicted="label_predicted"

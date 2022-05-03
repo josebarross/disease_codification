@@ -37,7 +37,11 @@ def calculate_mean_average_precision(sentences, labels_list: List[str], label_na
 
 
 def calculate_summary(
-    sentences, labels_list: List[str], label_name_predicted="label_predicted", first_n_digits: int = 0
+    sentences,
+    labels_list: List[str],
+    label_name_predicted="label_predicted",
+    first_n_digits: int = 0,
+    output_full: bool = True,
 ):
     if not sentences:
         return
@@ -58,7 +62,20 @@ def calculate_summary(
             label_value = get_label_value(label) if not first_n_digits else get_label_value(label)[:first_n_digits]
             if label.value != "<unk>":
                 pred[i, label_indexes[label_value]] = 1
-    report = classification_report(
-        gold, pred, digits=4, zero_division=0, target_names=[label for label in label_indexes.keys()]
-    )
-    logger.info(report)
+    if output_full:
+        report = classification_report(
+            gold, pred, digits=4, zero_division=0, target_names=[label for label in label_indexes.keys()]
+        )
+        logger.info(report)
+    else:
+        report = classification_report(
+            gold,
+            pred,
+            digits=4,
+            zero_division=0,
+            target_names=[label for label in label_indexes.keys()],
+            output_dict=True,
+        )
+        logger.info(f'micro avg: {report.get("micro avg")}')
+        logger.info(f'macro avg: {report.get("macro avg")}')
+        logger.info(f'weighted avg: {report.get("weighted avg")}')

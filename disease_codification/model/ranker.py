@@ -167,7 +167,7 @@ class Ranker:
                 self.cluster_tfidf[cluster] = None
                 self.cluster_classifier[cluster] = None
                 continue
-            self._set_tfidf(cluster, augmentation)
+            self._set_tfidf(cluster, sentences)
             embeddings = self._get_embeddings(cluster, sentences, transformer_for_embedding)
             labels = self._get_labels_matrix(cluster, sentences)
 

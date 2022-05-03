@@ -9,6 +9,7 @@ from disease_codification.custom_io import create_dir_if_dont_exist, save_as_pic
 from disease_codification.process_dataset.mapper import Augmentation, mapper_process_function
 from disease_codification import logger
 
+
 class Indexer:
     def __init__(
         self,
@@ -69,7 +70,7 @@ class Indexer:
         self.__create_matcher_corpus__()
         self.__create_ranker_corpus__()
         self.__create_augmentation_corpora__()
-        self.logger.info_info_of_labels()
+        self.log_info_of_labels()
 
     def __filter_labels_only_in_dataset__(self):
         labels_in_sentences = set(itertools.chain.from_iterable([ls for ls in self.df_sentences["labels"].to_list()]))
@@ -134,7 +135,7 @@ class Indexer:
     def __is_in_labels__(self, label, ls):
         return label in ls
 
-    def logger.info_info_of_labels(self):
+    def log_info_of_labels(self):
         if self.multi_cluster:
             clusters = np.array(list(itertools.chain.from_iterable(self.mappings_label_to_cluster.values())))
         else:
