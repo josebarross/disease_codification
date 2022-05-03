@@ -6,4 +6,5 @@ python-dotenv==0.20.0
 google-cloud-storage>=2.0
 openpyxl==3.0.9 
 obonet==0.3.0
-lxml==4.8.0 
+lxml==4.8.0
+torch==1.11.0
