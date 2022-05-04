@@ -1,7 +1,7 @@
 import itertools
 import statistics
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Union
 
 import numpy as np
 import torch
@@ -160,7 +160,7 @@ class Ranker:
         log_statistics_while_train: bool = True,
         train_starting_from_cluster: int = 0,
         train_until_cluster: int = None,
-        n_jobs: int = 1,
+        n_jobs: Union[float, int] = 1,
     ):
         clusters_to_train = (
             self.clusters[train_starting_from_cluster:]
@@ -186,7 +186,12 @@ class Ranker:
             embeddings = self._get_embeddings(cluster, sentences, transformer_for_embedding)
             labels = self._get_labels_matrix(cluster, sentences)
             xgb_classifier = XGBClassifier(eval_metric="logloss", use_label_encoder=False, tree_method=self.tree_method)
-            n_jobs = max(1, multiprocessing.cpu_count() + n_jobs) if n_jobs < 0 else n_jobs
+
+            if 0 < n_jobs < 1:
+                n_jobs = max(1, int(multiprocessing.cpu_count() * n_jobs))
+            elif n_jobs < 0:
+                n_jobs = max(1, multiprocessing.cpu_count() + n_jobs)
+
             logger.info(f"CPU to use: {n_jobs}")
             clf = OneVsRestClassifier(xgb_classifier, n_jobs=n_jobs).fit(embeddings, labels)
             self.cluster_classifier[cluster] = clf
