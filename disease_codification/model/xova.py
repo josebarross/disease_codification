@@ -47,7 +47,8 @@ class XOVA:
     ):
         if train_matcher:
             self.matcher.train(upload_to_gcp=upload_matcher_to_gcp, **matcher_train_args)
-        self.matcher.create_corpus_of_incorrectly_predicted()
+        if ranker_train_args.get("use_incorrect_matcher_predictions"):
+            self.matcher.create_corpus_of_incorrectly_predicted()
         if train_ranker:
             self.ranker.train(upload_to_gcp=upload_ranker_to_gcp, **ranker_train_args)
 
@@ -107,13 +108,22 @@ class XOVA:
                 elif self.mappings[get_label_value(label_ranker)] in matcher_predictions:
                     sentence.add_label("label_predicted", label_ranker.value, 1.0)
 
-    def eval(self, eval_metrics: List[Metrics] = [Metrics.summary, Metrics.map], first_n_digits_summary: int = 0):
+    def eval(
+        self,
+        eval_metrics: List[Metrics] = [Metrics.summary, Metrics.map],
+        first_n_digits_summary: int = 0,
+        eval_ranker: bool = True,
+        eval_matcher: bool = True,
+    ):
+        if eval_matcher:
+            corpus_matcher = read_corpus(self.indexers_path / self.indexer / "matcher", "matcher")
+            sentences_matcher = [s for s in corpus_matcher.test]
+            self.matcher.eval(sentences_matcher, eval_metrics=eval_metrics)
+        if eval_ranker:
+            self.ranker.eval_weighted(eval_weighted_metrics=eval_metrics)
+
         corpus = read_corpus(self.indexers_path / self.indexer / "corpus", "corpus")
-        corpus_matcher = read_corpus(self.indexers_path / self.indexer / "matcher", "matcher")
-        sentences_matcher = [s for s in corpus_matcher.test]
         sentences = [s for s in corpus.test]
-        self.matcher.eval(sentences_matcher, eval_metrics=eval_metrics)
-        self.ranker.eval_weighted(eval_weighted_metrics=eval_metrics)
         for metric in eval_metrics:
             if metric == Metrics.map:
                 self.predict(sentences)
