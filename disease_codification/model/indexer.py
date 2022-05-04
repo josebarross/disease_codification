@@ -30,7 +30,7 @@ class Indexer:
             Augmentation.ner_mention,
         ],
         subset: int = None,
-        multi_cluster: bool = False,
+        clustering_type: str = "single_cluster_per_label",  # single_cluster_per_label, multi_cluster, multi_cluster_keep_specific
     ):
         self.corpus = corpus
         self.corpuses_path = corpuses_path
@@ -40,10 +40,11 @@ class Indexer:
         self.augmentation_corpus = augmentation_corpus
         self.df_sentences = mapper_process_function[corpus]["sentence"](corpuses_path)
         self.df_labels = mapper_process_function[corpus]["labels"](corpuses_path, for_augmentation=False)
-        self.multi_cluster = multi_cluster
+        self.clustering_type = clustering_type
         self.__create_paths__()
         if subset:
             self.df_sentences = self.df_sentences[:subset]
+        self.create_corpuses()
 
     def __create_paths__(self):
         create_dir_if_dont_exist(self.indexer_path)
@@ -61,16 +62,36 @@ class Indexer:
         logger.info("Creating corpuses for use by models")
         self.__filter_labels_only_in_dataset__()
         self.mappings_label_to_cluster = self.__clusterize__()
-        if self.multi_cluster:
+        self.cluster_counts = self._get_cluster_counts_()
+        logger.info(self.cluster_counts)
+        if self.clustering_type == "multi_cluster":
             self.clusters = set(itertools.chain.from_iterable(self.mappings_label_to_cluster.values()))
+        elif self.clustering_type == "multi_cluster_keep_specific":
+            self.mappings_label_to_cluster = {
+                l: min(cs, key=lambda x: self.cluster_counts[x]) for l, cs in self.mappings_label_to_cluster.items()
+            }
+            self.clustering_type = "single_cluster_per_label"
+            self.clusters = set(self.mappings_label_to_cluster.values())
+            self.cluster_counts = self._get_cluster_counts_()
         else:
             self.clusters = set(self.mappings_label_to_cluster.values())
+
+        # logger.info(self.mappings_label_to_cluster)
+        logger.info(self._get_cluster_counts_())
         save_as_pickle(self.mappings_label_to_cluster, self.indexer_path / "mappings.pickle")
         self.__create_corpus__()
         self.__create_matcher_corpus__()
         self.__create_ranker_corpus__()
         self.__create_augmentation_corpora__()
         self.log_info_of_labels()
+
+    def _get_cluster_counts_(self):
+        if self.clustering_type.startswith("multi_cluster"):
+            clusters = np.array(list(itertools.chain.from_iterable(self.mappings_label_to_cluster.values())))
+        else:
+            clusters = np.array(list(self.mappings_label_to_cluster.values()))
+        unique, counts = np.unique(clusters, return_counts=True)
+        return dict(zip(unique, counts))
 
     def __filter_labels_only_in_dataset__(self):
         labels_in_sentences = set(itertools.chain.from_iterable([ls for ls in self.df_sentences["labels"].to_list()]))
@@ -84,7 +105,6 @@ class Indexer:
             self.corpuses_path, self.all_labels
         )
         mappings = dict(zip(self.all_labels, clusters_assigned))
-        logger.info(mappings)
         return mappings
 
     def __create_corpus__(self):
@@ -115,7 +135,7 @@ class Indexer:
                 for ls in df_split_type["labels"].to_list():
                     ls_parsed = (
                         [l for l in ls if cluster in self.mappings_label_to_cluster[l]]
-                        if self.multi_cluster
+                        if self.clustering_type == "multi_cluster"
                         else [label for label in ls if self.mappings_label_to_cluster[label] == cluster]
                     )
                     labels.append(ls_parsed)
@@ -124,7 +144,7 @@ class Indexer:
                 )
 
     def __labels_to_clusters__(self, ls):
-        if self.multi_cluster:
+        if self.clustering_type == "multi_cluster":
             return set(itertools.chain.from_iterable(self.mappings_label_to_cluster[l] for l in ls))
         else:
             return {self.mappings_label_to_cluster[l] for l in ls}
@@ -136,14 +156,10 @@ class Indexer:
         return label in ls
 
     def log_info_of_labels(self):
-        if self.multi_cluster:
-            clusters = np.array(list(itertools.chain.from_iterable(self.mappings_label_to_cluster.values())))
-        else:
-            clusters = np.array(list(self.mappings_label_to_cluster.values()))
         logger.info(f"Amount of labels: {len(self.mappings_label_to_cluster)}")
-        unique, counts = np.unique(clusters, return_counts=True)
+        counts = [c for c in self.cluster_counts.values()]
         logger.info(f"Amount of labels multi-cluster: {sum(counts)}")
-        logger.info(dict(zip(unique, counts)))
+        logger.info(self.cluster_counts)
         logger.info(f"Mean: {np.mean(counts)}")
         logger.info(f"Std: {np.std(counts)}")
 
