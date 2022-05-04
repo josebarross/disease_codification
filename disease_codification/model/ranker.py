@@ -32,6 +32,7 @@ class Ranker:
         cluster_classifier={},
         cluster_label_binarizer={},
         cluster_tfidf: Dict[str, TfidfVectorizer] = {},
+        tree_method: str = "exact",
     ):
         self.indexers_path: Path = indexers_path
         self.models_path: Path = models_path
@@ -41,8 +42,6 @@ class Ranker:
         self.cluster_tfidf = cluster_tfidf
         self.mappings, self.clusters, self.multi_cluster = load_mappings(self.indexers_path, self.indexer)
         self.transformer_for_embedding = None
-        self.tree_method = "gpu_hist" if torch.cuda.is_available() else "hist"
-        logger.info(f"Tree method: {self.tree_method}")
         Ranker.create_directories(models_path, indexer)
 
     @classmethod
@@ -164,6 +163,7 @@ class Ranker:
         n_jobs_ova: Union[float, int] = 1,
         n_jobs_xgb: Union[float, int] = -1,
         scale_pos_weight: str = "max",
+        tree_method: str = "exact",
     ):
         clusters_to_train = (
             self.clusters[train_starting_from_cluster:]
@@ -192,6 +192,7 @@ class Ranker:
                 n_jobs_ova=n_jobs_ova,
                 n_jobs_xgb=n_jobs_xgb,
                 scale_pos_weight=scale_pos_weight,
+                tree_method=tree_method,
             )
 
         logger.info("Training Complete")
@@ -213,7 +214,8 @@ class Ranker:
         log_statistics_while_train: bool = True,
         n_jobs_ova: int = 1,
         n_jobs_xgb: int = 1,
-        scale_pos_weight: str = "max",  # mean, max
+        scale_pos_weight: str = "mean",  # mean, max
+        tree_method: str = "exact",
     ):
         self._set_multi_label_binarizer(cluster)
         sentences = self._read_sentences(
@@ -230,19 +232,21 @@ class Ranker:
         embeddings = self._get_embeddings(cluster, sentences, transformer_for_embedding)
         labels = self._get_labels_matrix(cluster, sentences)
 
+        del sentences
+
         if scale_pos_weight == "max":
             scale_pos_weight = labels.shape[1] / np.max(labels.sum(axis=1))
         elif scale_pos_weight == "mean":
-            scale_pos_weight = np.mean(labels.sum(axis=1) / labels.shape[1])
-        logger.info(scale_pos_weight)
-
-        del sentences
+            scale_pos_weight = labels.shape[1] / np.mean(labels.sum(axis=1))
 
         logger.info(f"CPU to use: OVA-{n_jobs_ova}, XGBoost-{n_jobs_xgb}")
+        logger.info(f"Tree method: {self.tree_method}")
+        logger.info(f"Scale pos weight: {scale_pos_weight}")
+
         xgb_classifier = XGBClassifier(
             eval_metric="logloss",
             use_label_encoder=False,
-            tree_method=self.tree_method,
+            tree_method=tree_method,
             n_jobs=n_jobs_xgb,
             scale_pos_weight=scale_pos_weight,
             verbosity=1,
