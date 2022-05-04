@@ -240,7 +240,7 @@ class Ranker:
             scale_pos_weight = labels.shape[1] / np.mean(labels.sum(axis=1))
 
         logger.info(f"CPU to use: OVA-{n_jobs_ova}, XGBoost-{n_jobs_xgb}")
-        logger.info(f"Tree method: {self.tree_method}")
+        logger.info(f"Tree method: {tree_method}")
         logger.info(f"Scale pos weight: {scale_pos_weight}")
 
         xgb_classifier = XGBClassifier(
