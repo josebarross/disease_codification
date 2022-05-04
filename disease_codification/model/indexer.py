@@ -142,6 +142,7 @@ class Indexer:
             clusters = np.array(list(self.mappings_label_to_cluster.values()))
         logger.info(f"Amount of labels: {len(self.mappings_label_to_cluster)}")
         unique, counts = np.unique(clusters, return_counts=True)
+        logger.info(f"Amount of labels multi-cluster: {sum(counts)}")
         logger.info(dict(zip(unique, counts)))
         logger.info(f"Mean: {np.mean(counts)}")
         logger.info(f"Std: {np.std(counts)}")
