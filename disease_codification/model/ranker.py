@@ -195,7 +195,7 @@ class Ranker:
                 logger.info(f'MAP: {self.eval_cluster(cluster, Metrics.map, "test")}')
                 logger.info(f'F1: {self.eval_cluster(cluster, Metrics.summary, "test")}')
 
-            self.save_cluster(cluster, upload_to_gcp=upload_to_gcp)
+            self.save_cluster(cluster)
             if upload_to_gcp:
                 self.upload_cluster_to_gcp(cluster)
 
