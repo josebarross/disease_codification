@@ -159,9 +159,11 @@ class Ranker:
         subset: int = 0,
         transformer_for_embedding: str = None,
         log_statistics_while_train: bool = True,
-        n_jobs: Union[float, int] = 1,
         train_starting_from_cluster: int = 0,
         train_until_cluster: int = None,
+        n_jobs_ova: Union[float, int] = 1,
+        n_jobs_xgb: Union[float, int] = -1,
+        scale_pos_weight: str = "max",
     ):
         clusters_to_train = (
             self.clusters[train_starting_from_cluster:]
@@ -170,9 +172,27 @@ class Ranker:
         )
         len_clusters = len(clusters_to_train)
         logger.info(f"Clusters to train: {clusters_to_train}")
+        if 0 < n_jobs_ova < 1:
+            n_jobs_ova = max(1, int(multiprocessing.cpu_count() * n_jobs_ova))
+        elif n_jobs_ova < 0:
+            n_jobs_ova = max(1, multiprocessing.cpu_count() + n_jobs_ova)
+        if 0 < n_jobs_xgb < 1:
+            n_jobs_xgb = max(1, int(multiprocessing.cpu_count() * n_jobs_xgb))
         for i, cluster in enumerate(clusters_to_train):
             logger.info(f"Training for cluster {cluster} - {i}/{len_clusters}")
-            self._train_cluster()
+            self._train_cluster(
+                cluster,
+                upload_to_gcp=upload_to_gcp,
+                split_types_train=split_types_train,
+                augmentation=augmentation,
+                use_incorrect_matcher_predictions=use_incorrect_matcher_predictions,
+                subset=subset,
+                transformer_for_embedding=transformer_for_embedding,
+                log_statistics_while_train=log_statistics_while_train,
+                n_jobs_ova=n_jobs_ova,
+                n_jobs_xgb=n_jobs_xgb,
+                scale_pos_weight=scale_pos_weight,
+            )
 
         logger.info("Training Complete")
 
@@ -191,7 +211,9 @@ class Ranker:
         subset: int = 0,
         transformer_for_embedding: str = None,
         log_statistics_while_train: bool = True,
-        n_jobs: Union[float, int] = 1,
+        n_jobs_ova: int = 1,
+        n_jobs_xgb: int = 1,
+        scale_pos_weight: str = "max",  # mean, max
     ):
         self._set_multi_label_binarizer(cluster)
         sentences = self._read_sentences(
@@ -208,17 +230,24 @@ class Ranker:
         embeddings = self._get_embeddings(cluster, sentences, transformer_for_embedding)
         labels = self._get_labels_matrix(cluster, sentences)
 
+        if scale_pos_weight == "max":
+            scale_pos_weight = labels.shape[1] / np.max(labels.sum(axis=1))
+        elif scale_pos_weight == "mean":
+            scale_pos_weight = np.mean(labels.sum(axis=1) / labels.shape[1])
+        logger.info(scale_pos_weight)
+
         del sentences
 
-        xgb_classifier = XGBClassifier(eval_metric="logloss", use_label_encoder=False, tree_method=self.tree_method)
-
-        if 0 < n_jobs < 1:
-            n_jobs = max(1, int(multiprocessing.cpu_count() * n_jobs))
-        elif n_jobs < 0:
-            n_jobs = max(1, multiprocessing.cpu_count() + n_jobs)
-
-        logger.info(f"CPU to use: {n_jobs}")
-        clf = OneVsRestClassifier(xgb_classifier, n_jobs=n_jobs).fit(embeddings, labels)
+        logger.info(f"CPU to use: OVA-{n_jobs_ova}, XGBoost-{n_jobs_xgb}")
+        xgb_classifier = XGBClassifier(
+            eval_metric="logloss",
+            use_label_encoder=False,
+            tree_method=self.tree_method,
+            n_jobs=n_jobs_xgb,
+            scale_pos_weight=scale_pos_weight,
+            verbosity=1,
+        )
+        clf = OneVsRestClassifier(xgb_classifier, n_jobs=n_jobs_ova).fit(embeddings, labels)
         self.cluster_classifier[cluster] = clf
 
         if log_statistics_while_train:
