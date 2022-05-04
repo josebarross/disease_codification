@@ -1,6 +1,7 @@
 import itertools
 import statistics
 from pathlib import Path
+import sys
 from typing import Dict, List, Union
 
 import numpy as np
@@ -158,9 +159,9 @@ class Ranker:
         subset: int = 0,
         transformer_for_embedding: str = None,
         log_statistics_while_train: bool = True,
+        n_jobs: Union[float, int] = 1,
         train_starting_from_cluster: int = 0,
         train_until_cluster: int = None,
-        n_jobs: Union[float, int] = 1,
     ):
         clusters_to_train = (
             self.clusters[train_starting_from_cluster:]
@@ -171,40 +172,62 @@ class Ranker:
         logger.info(f"Clusters to train: {clusters_to_train}")
         for i, cluster in enumerate(clusters_to_train):
             logger.info(f"Training for cluster {cluster} - {i}/{len_clusters}")
-            self._set_multi_label_binarizer(cluster)
-            sentences = self._read_sentences(
-                cluster, split_types_train, augmentation, use_incorrect_matcher_predictions, subset
-            )
-
-            if len(sentences) == 0:
-                logger.info("Cluster has no sentences")
-                self.cluster_tfidf[cluster] = None
-                self.cluster_classifier[cluster] = None
-                continue
-
-            self._set_tfidf(cluster, sentences)
-            embeddings = self._get_embeddings(cluster, sentences, transformer_for_embedding)
-            labels = self._get_labels_matrix(cluster, sentences)
-            xgb_classifier = XGBClassifier(eval_metric="logloss", use_label_encoder=False, tree_method=self.tree_method)
-
-            if 0 < n_jobs < 1:
-                n_jobs = max(1, int(multiprocessing.cpu_count() * n_jobs))
-            elif n_jobs < 0:
-                n_jobs = max(1, multiprocessing.cpu_count() + n_jobs)
-
-            logger.info(f"CPU to use: {n_jobs}")
-            clf = OneVsRestClassifier(xgb_classifier, n_jobs=n_jobs).fit(embeddings, labels)
-            self.cluster_classifier[cluster] = clf
-
-            if log_statistics_while_train:
-                logger.info(f'MAP: {self.eval_cluster(cluster, Metrics.map, "test")}')
-                logger.info(f'F1: {self.eval_cluster(cluster, Metrics.summary, "test")}')
-
-            self.save_cluster(cluster)
-            if upload_to_gcp:
-                self.upload_cluster_to_gcp(cluster)
+            self._train_cluster()
 
         logger.info("Training Complete")
+
+    def _train_cluster(
+        self,
+        cluster: str,
+        upload_to_gcp: bool = False,
+        split_types_train: List[str] = ["train", "dev"],
+        augmentation: List[Augmentation] = [
+            Augmentation.ner_mention,
+            Augmentation.ner_sentence,
+            Augmentation.ner_stripped,
+            Augmentation.descriptions_labels,
+        ],
+        use_incorrect_matcher_predictions: bool = False,
+        subset: int = 0,
+        transformer_for_embedding: str = None,
+        log_statistics_while_train: bool = True,
+        n_jobs: Union[float, int] = 1,
+    ):
+        self._set_multi_label_binarizer(cluster)
+        sentences = self._read_sentences(
+            cluster, split_types_train, augmentation, use_incorrect_matcher_predictions, subset
+        )
+
+        if len(sentences) == 0:
+            logger.info("Cluster has no sentences")
+            self.cluster_tfidf[cluster] = None
+            self.cluster_classifier[cluster] = None
+            return
+
+        self._set_tfidf(cluster, sentences)
+        embeddings = self._get_embeddings(cluster, sentences, transformer_for_embedding)
+        labels = self._get_labels_matrix(cluster, sentences)
+
+        del sentences
+
+        xgb_classifier = XGBClassifier(eval_metric="logloss", use_label_encoder=False, tree_method=self.tree_method)
+
+        if 0 < n_jobs < 1:
+            n_jobs = max(1, int(multiprocessing.cpu_count() * n_jobs))
+        elif n_jobs < 0:
+            n_jobs = max(1, multiprocessing.cpu_count() + n_jobs)
+
+        logger.info(f"CPU to use: {n_jobs}")
+        clf = OneVsRestClassifier(xgb_classifier, n_jobs=n_jobs).fit(embeddings, labels)
+        self.cluster_classifier[cluster] = clf
+
+        if log_statistics_while_train:
+            logger.info(f'MAP: {self.eval_cluster(cluster, Metrics.map, "test")}')
+            logger.info(f'F1: {self.eval_cluster(cluster, Metrics.summary, "test")}')
+
+        self.save_cluster(cluster)
+        if upload_to_gcp:
+            self.upload_cluster_to_gcp(cluster)
 
     def predict(self, sentences: List[Sentence], return_probabilities=True):
         logger.info("Predicting ranker")
