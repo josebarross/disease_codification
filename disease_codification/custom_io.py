@@ -39,9 +39,9 @@ def load_mappings(indexers_path, indexer):
     mappings: Dict[str, str] = load_pickle(indexers_path / indexer / "mappings.pickle")
     multi_cluster = _is_mappings_multi_cluster(mappings)
     if multi_cluster:
-        clusters: List[str] = set(itertools.chain.from_iterable(mappings.values()))
+        clusters: List[str] = sorted(list(set(itertools.chain.from_iterable(mappings.values()))))
     else:
-        clusters: List[str] = set(mappings.values())
+        clusters: List[str] = sorted(list(set(mappings.values())))
     return mappings, clusters, multi_cluster
 
 
