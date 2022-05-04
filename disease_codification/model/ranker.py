@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Dict, List
 
 import numpy as np
+import torch
 from disease_codification.custom_io import create_dir_if_dont_exist, load_mappings, load_pickle, save_as_pickle
 from disease_codification.flair_utils import read_augmentation_corpora, read_corpus
 from disease_codification.gcp import download_blob_file, upload_blob_file
@@ -39,7 +40,8 @@ class Ranker:
         self.cluster_tfidf = cluster_tfidf
         self.mappings, self.clusters, self.multi_cluster = load_mappings(self.indexers_path, self.indexer)
         self.transformer_for_embedding = None
-        self.tree_method = "hist"
+        self.tree_method = "gpu_hist" if torch.cuda.is_available() else "hist"
+        logger.info(f"Tree method: {self.tree_method}")
         Ranker.create_directories(models_path, indexer)
 
     @classmethod
@@ -156,9 +158,18 @@ class Ranker:
         subset: int = 0,
         transformer_for_embedding: str = None,
         log_statistics_while_train: bool = True,
+        train_starting_from_cluster: int = 0,
+        train_until_cluster: int = None,
+        n_jobs: int = 1,
     ):
-        len_clusters = len(self.clusters)
-        for i, cluster in enumerate(self.clusters):
+        clusters_to_train = (
+            self.clusters[train_starting_from_cluster:]
+            if not train_until_cluster
+            else self.clusters[train_starting_from_cluster:train_until_cluster]
+        )
+        len_clusters = len(clusters_to_train)
+        logger.info(f"Clusters to train: {clusters_to_train}")
+        for i, cluster in enumerate(clusters_to_train):
             logger.info(f"Training for cluster {cluster} - {i}/{len_clusters}")
             self._set_multi_label_binarizer(cluster)
             sentences = self._read_sentences(
@@ -173,17 +184,20 @@ class Ranker:
             embeddings = self._get_embeddings(cluster, sentences, transformer_for_embedding)
             labels = self._get_labels_matrix(cluster, sentences)
             xgb_classifier = XGBClassifier(eval_metric="logloss", use_label_encoder=False, tree_method=self.tree_method)
-            n_jobs = multiprocessing.cpu_count() - 1
+            n_jobs = max(1, multiprocessing.cpu_count() + n_jobs) if n_jobs < 0 else n_jobs
             logger.info(f"CPU to use: {n_jobs}")
             clf = OneVsRestClassifier(xgb_classifier, n_jobs=n_jobs).fit(embeddings, labels)
             self.cluster_classifier[cluster] = clf
+
             if log_statistics_while_train:
                 logger.info(f'MAP: {self.eval_cluster(cluster, Metrics.map, "test")}')
                 logger.info(f'F1: {self.eval_cluster(cluster, Metrics.summary, "test")}')
+
+            self.save_cluster(cluster, upload_to_gcp=upload_to_gcp)
+            if upload_to_gcp:
+                self.upload_cluster_to_gcp(cluster)
+
         logger.info("Training Complete")
-        self.save()
-        if upload_to_gcp:
-            self.upload_to_gcp()
 
     def predict(self, sentences: List[Sentence], return_probabilities=True):
         logger.info("Predicting ranker")
@@ -255,20 +269,29 @@ class Ranker:
 
     def save(self):
         logger.info("Saving model")
-        base_path = self.models_path / self.indexer / "ranker"
         for cluster in self.clusters:
-            save_as_pickle(self.cluster_label_binarizer[cluster], base_path / f"label_binarizer_{cluster}.pickle")
-            save_as_pickle(self.cluster_classifier[cluster], base_path / f"classifier_{cluster}.pickle")
-            save_as_pickle(self.cluster_tfidf[cluster], base_path / f"tfidf_{cluster}.pickle")
+            self.save_cluster(self, cluster)
+
+    def save_cluster(self, cluster):
+        logger.info(f"Saving model created for cluster {cluster}")
+        base_path = self.models_path / self.indexer / "ranker"
+        save_as_pickle(self.cluster_label_binarizer[cluster], base_path / f"label_binarizer_{cluster}.pickle")
+        save_as_pickle(self.cluster_classifier[cluster], base_path / f"classifier_{cluster}.pickle")
+        save_as_pickle(self.cluster_tfidf[cluster], base_path / f"tfidf_{cluster}.pickle")
 
     def upload_to_gcp(self):
-        base_path = self.models_path / self.indexer / "ranker"
+        logger.info("Uploading ranker to GCP")
         for cluster in self.clusters:
-            upload_blob_file(
-                base_path / f"label_binarizer_{cluster}.pickle",
-                f"{self.indexer}/ranker/label_binarizer_{cluster}.pickle",
-            )
-            upload_blob_file(
-                base_path / f"classifier_{cluster}.pickle", f"{self.indexer}/ranker/classifier_{cluster}.pickle"
-            )
-            upload_blob_file(base_path / f"tfidf_{cluster}.pickle", f"{self.indexer}/ranker/tfidf_{cluster}.pickle")
+            self.upload_cluster_to_gcp(cluster)
+
+    def upload_cluster_to_gcp(self, cluster):
+        logger.info(f"Uploading model created for cluster {cluster} to GCP")
+        base_path = self.models_path / self.indexer / "ranker"
+        upload_blob_file(
+            base_path / f"label_binarizer_{cluster}.pickle",
+            f"{self.indexer}/ranker/label_binarizer_{cluster}.pickle",
+        )
+        upload_blob_file(
+            base_path / f"classifier_{cluster}.pickle", f"{self.indexer}/ranker/classifier_{cluster}.pickle"
+        )
+        upload_blob_file(base_path / f"tfidf_{cluster}.pickle", f"{self.indexer}/ranker/tfidf_{cluster}.pickle")
