@@ -18,6 +18,7 @@ from sklearn.multiclass import OneVsRestClassifier
 from sklearn.preprocessing import MultiLabelBinarizer
 from xgboost import XGBClassifier
 from disease_codification import logger
+import multiprocessing
 
 
 class Ranker:
@@ -38,6 +39,7 @@ class Ranker:
         self.cluster_tfidf = cluster_tfidf
         self.mappings, self.clusters, self.multi_cluster = load_mappings(self.indexers_path, self.indexer)
         self.transformer_for_embedding = None
+        self.tree_method = "hist"
         Ranker.create_directories(models_path, indexer)
 
     @classmethod
@@ -93,10 +95,9 @@ class Ranker:
             corpora.append(incorrect_matcher_corpus)
         corpora += read_augmentation_corpora(augmentation, self.indexers_path, self.indexer, "ranker", cluster)
         multi_corpus = MultiCorpus(corpora)
-        sentences = []
-        for split_type in split_types:
-            if getattr(multi_corpus, split_type):
-                sentences += list(getattr(multi_corpus, split_type))
+        sentences = itertools.chain.from_iterable(
+            getattr(multi_corpus, split_type) for split_type in split_types if getattr(multi_corpus, split_type)
+        )
         if subset and len(sentences) < subset:
             sentences = sentences[:subset]
         return sentences
@@ -171,12 +172,14 @@ class Ranker:
             self._set_tfidf(cluster, sentences)
             embeddings = self._get_embeddings(cluster, sentences, transformer_for_embedding)
             labels = self._get_labels_matrix(cluster, sentences)
-
-            clf = OneVsRestClassifier(XGBClassifier(eval_metric="logloss")).fit(embeddings, labels)
+            xgb_classifier = XGBClassifier(eval_metric="logloss", use_label_encoder=False, tree_method=self.tree_method)
+            n_jobs = multiprocessing.cpu_count() - 1
+            logger.info(f"CPU to use: {n_jobs}")
+            clf = OneVsRestClassifier(xgb_classifier, n_jobs=n_jobs).fit(embeddings, labels)
+            self.cluster_classifier[cluster] = clf
             if log_statistics_while_train:
                 logger.info(f'MAP: {self.eval_cluster(cluster, Metrics.map, "test")}')
                 logger.info(f'F1: {self.eval_cluster(cluster, Metrics.summary, "test")}')
-            self.cluster_classifier[cluster] = clf
         logger.info("Training Complete")
         self.save()
         if upload_to_gcp:
@@ -228,7 +231,7 @@ class Ranker:
     def eval_cluster(self, cluster, metric, split_type):
         sentences = self._read_sentences(cluster, [split_type])
         if not sentences:
-            return None, None
+            return 0, 0
         classifier = self.cluster_classifier.get(cluster)
         labels_matrix = self._get_labels_matrix(cluster, sentences)
         if metric == Metrics.map:
@@ -241,14 +244,14 @@ class Ranker:
             aps = []
             for y_true, y_scores in zip(labels_matrix, predictions):
                 aps.append(average_precision_score(y_true, y_scores))
-                return statistics.mean(aps), embeddings.shape[0]
+            return statistics.mean(aps), len(sentences)
         elif metric == Metrics.summary:
             if not classifier:
                 predictions = np.zeros_like(labels_matrix)
             else:
                 embeddings = self._get_embeddings(cluster, sentences)
                 predictions = self.cluster_classifier[cluster].predict(embeddings)
-            return f1_score(labels_matrix, predictions, average="micro"), embeddings.shape[0]
+            return f1_score(labels_matrix, predictions, average="micro"), len(sentences)
 
     def save(self):
         logger.info("Saving model")
