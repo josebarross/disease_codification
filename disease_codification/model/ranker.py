@@ -102,7 +102,7 @@ class Ranker:
         )
         if subset and len(sentences) < subset:
             sentences = sentences[:subset]
-        return sentences
+        return list(sentences)
 
     def _set_multi_label_binarizer(self, cluster: str):
         mlb = MultiLabelBinarizer()
@@ -175,11 +175,13 @@ class Ranker:
             sentences = self._read_sentences(
                 cluster, split_types_train, augmentation, use_incorrect_matcher_predictions, subset
             )
-            if not sentences:
+
+            if len(sentences) == 0:
                 logger.info("Cluster has no sentences")
                 self.cluster_tfidf[cluster] = None
                 self.cluster_classifier[cluster] = None
                 continue
+
             self._set_tfidf(cluster, sentences)
             embeddings = self._get_embeddings(cluster, sentences, transformer_for_embedding)
             labels = self._get_labels_matrix(cluster, sentences)
