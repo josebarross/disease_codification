@@ -24,12 +24,6 @@ def download_codiesp_corpus(corpuses_path: Path):
     download_corpus(corpuses_path, "codiesp_codes", url, create_containing_folder=True)
 
 
-def download_livingner_corpus(corpuses_path: Path):
-    logger.info("Downloading LIVINGNER corpus")
-    url = "https://zenodo.org/record/6421410/files/training_valid.zip?download=1"
-    download_corpus(corpuses_path, "livingner", url, create_containing_folder=True)
-
-
 def download_cantemist_corpus(corpuses_path: Path):
     logger.info("Downloading CANTEMIST corpus")
     url = "https://zenodo.org/record/3978041/files/cantemist.zip?download=1"
