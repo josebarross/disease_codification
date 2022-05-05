@@ -4,7 +4,7 @@ from disease_codification.model.indexer import Indexer
 from disease_codification.model.xova import XOVA
 
 
-def reproduce_model_codiesp(data_path: Path):
+def reproduce_model(data_path: Path):
     corpuses_path, indexers_path, models_path = create_directories(data_path)
     download_codiesp_corpus(corpuses_path)
     Indexer("codiesp", corpuses_path, indexers_path)

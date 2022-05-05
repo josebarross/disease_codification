@@ -6,7 +6,7 @@ from disease_codification.model.xova import XOVA
 from disease_codification import logger
 
 
-def reproduce_model_codiesp(corpuses_path: Path, indexers_path: Path, models_path: Path):
+def reproduce_model(corpuses_path: Path, indexers_path: Path, models_path: Path):
     download_mesinesp_corpus(corpuses_path)
     corpus = "mesinesp_st1"
     Indexer(corpus, corpuses_path, indexers_path, clustering_type="multi_cluster")
