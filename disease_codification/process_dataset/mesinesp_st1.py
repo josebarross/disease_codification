@@ -58,7 +58,51 @@ def cluster_assigner(corpuses_path: Path, labels: List[str]):
         ui = result.find("DescriptorUI").text
         tree_locations = result.xpath("./TreeNumberList/TreeNumber/text()")
         if tree_locations:
-            clusters = set([r[:3] for r in tree_locations])
+            special_ones = [
+                "B01.050",
+                "B01.875",
+                "C10.228",
+                "C23.550",
+                "C23.888",
+                "D02.063",
+                "D02.065",
+                "D02.092",
+                "D02.241",
+                "D02.445",
+                "D02.886",
+                "D03.383",
+                "D03.633",
+                "E05.200",
+                "E05.318",
+                "D12.644",
+                "D12.776",
+                "M01.526",
+                "N05.715",
+                "N06.850",
+            ]
+            special_ones2 = [
+                "D12.776.124",
+                "D12.776.157",
+                "D12.776.377",
+                "D12.776.395",
+                "D12.776.467",
+                "D12.776.476",
+                "D12.776.543",
+                "E01.370.225",
+                "E01.370.350",
+            ]
+            special_ones3 = ["V"]
+            clusters = []
+            for r in tree_locations:
+                if r[:11] in special_ones2:
+                    clusters.append(r[:11])
+                elif r[:7] in special_ones:
+                    clusters.append(r[:7])
+                elif r[:1] in special_ones3:
+                    clusters.append(r[:1])
+                else:
+                    clusters.append(r[:3])
+            clusters = set(clusters)
         else:
             clusters = ["not-mesh"]
             not_mesh += 1

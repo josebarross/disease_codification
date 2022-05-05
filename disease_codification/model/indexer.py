@@ -1,6 +1,7 @@
 import itertools
 from enum import Enum
 from functools import partial
+import json
 from pathlib import Path
 from typing import Dict, List
 
@@ -63,7 +64,6 @@ class Indexer:
         self.__filter_labels_only_in_dataset__()
         self.mappings_label_to_cluster = self.__clusterize__()
         self.cluster_counts = self._get_cluster_counts_()
-        logger.info(self.cluster_counts)
         if self.clustering_type == "multi_cluster":
             self.clusters = set(itertools.chain.from_iterable(self.mappings_label_to_cluster.values()))
         elif self.clustering_type == "multi_cluster_keep_specific":
@@ -76,8 +76,6 @@ class Indexer:
         else:
             self.clusters = set(self.mappings_label_to_cluster.values())
 
-        # logger.info(self.mappings_label_to_cluster)
-        logger.info(self._get_cluster_counts_())
         save_as_pickle(self.mappings_label_to_cluster, self.indexer_path / "mappings.pickle")
         self.__create_corpus__()
         self.__create_matcher_corpus__()
@@ -91,7 +89,7 @@ class Indexer:
         else:
             clusters = np.array(list(self.mappings_label_to_cluster.values()))
         unique, counts = np.unique(clusters, return_counts=True)
-        return dict(zip(unique, counts))
+        return dict(zip(unique, [int(c) for c in counts]))
 
     def __filter_labels_only_in_dataset__(self):
         labels_in_sentences = set(itertools.chain.from_iterable([ls for ls in self.df_sentences["labels"].to_list()]))
@@ -139,6 +137,8 @@ class Indexer:
                         else [label for label in ls if self.mappings_label_to_cluster[label] == cluster]
                     )
                     labels.append(ls_parsed)
+                if len(sentences) > 50000 and self.cluster_counts[cluster] > 200:
+                    print(cluster)
                 write_fasttext_file(
                     sentences, labels, self.indexer_path / "ranker" / f"ranker_{cluster}_{split_type}.txt"
                 )
@@ -156,10 +156,11 @@ class Indexer:
         return label in ls
 
     def log_info_of_labels(self):
+        logger.info(f"Amount of clusters: {len(self.clusters)}")
         logger.info(f"Amount of labels: {len(self.mappings_label_to_cluster)}")
         counts = [c for c in self.cluster_counts.values()]
         logger.info(f"Amount of labels multi-cluster: {sum(counts)}")
-        logger.info(self.cluster_counts)
+        logger.info(json.dumps(self.cluster_counts, indent=2))
         logger.info(f"Mean: {np.mean(counts)}")
         logger.info(f"Std: {np.std(counts)}")
 
