@@ -65,6 +65,7 @@ class Matcher:
         layers="-1",
         transformer_name="PlanTL-GOB-ES/roberta-base-biomedical-es",
         num_workers=2,
+        save_model_each_k_epochs: int = 0,
     ):
         logger.info(f"Finetuning for {self.indexer}")
         corpus = read_corpus(self.indexers_path / self.indexer / "matcher", "matcher")
@@ -85,6 +86,7 @@ class Matcher:
             layers=layers,
             transformer_name=transformer_name,
             num_workers=num_workers,
+            save_model_each_k_epochs=save_model_each_k_epochs,
         )
         if upload_to_gcp:
             self.upload_to_gcp()
