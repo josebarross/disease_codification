@@ -44,7 +44,7 @@ class Indexer:
         self.__create_paths__()
         if subset:
             self.df_sentences = self.df_sentences[:subset]
-        self.create_corpuses()
+        self._create_corpuses()
 
     def __create_paths__(self):
         create_dir_if_dont_exist(self.indexer_path)
@@ -58,7 +58,7 @@ class Indexer:
         for aug in self.augmentation_corpus:
             create_dir_if_dont_exist(self.indexer_path / f"corpus-{aug}")
 
-    def create_corpuses(self):
+    def _create_corpuses(self):
         logger.info("Creating corpuses for use by models")
         self.__filter_labels_only_in_dataset__()
         self.mappings_label_to_cluster = self.__clusterize__()
