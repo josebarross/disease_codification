@@ -24,10 +24,10 @@ def calculate_mean_average_precision(sentences, labels_list: List[str], label_na
         gold = np.zeros(len(label_indexes))
         pred = np.zeros(len(label_indexes))
         for label in sentence.get_labels("gold"):
-            if label.value != "<unk>":
+            if label.value not in ["<unk>", "unk"]:
                 gold[label_indexes[get_label_value(label)]] = 1
         for label in sentence.get_labels(label_name_predicted):
-            if label.value != "<unk>":
+            if label.value not in ["<unk>", "unk"]:
                 pred[label_indexes[get_label_value(label)]] = label.score
         if gold.any():
             avg_precs.append(average_precision_score(gold, pred))
@@ -56,11 +56,11 @@ def calculate_summary(
     for i, sentence in enumerate(sentences):
         for label in sentence.get_labels("gold"):
             label_value = get_label_value(label) if not first_n_digits else get_label_value(label)[:first_n_digits]
-            if label.value != "<unk>":
+            if label.value not in ["<unk>", "unk"]:
                 gold[i, label_indexes[label_value]] = 1
         for label in sentence.get_labels(label_name_predicted):
             label_value = get_label_value(label) if not first_n_digits else get_label_value(label)[:first_n_digits]
-            if label.value != "<unk>":
+            if label.value not in ["<unk>", "unk"]:
                 pred[i, label_indexes[label_value]] = 1
     if output_full:
         report = classification_report(
