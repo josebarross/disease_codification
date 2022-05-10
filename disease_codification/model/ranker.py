@@ -1,11 +1,11 @@
 import itertools
+import multiprocessing
 import statistics
 from pathlib import Path
-import sys
 from typing import Dict, List, Union
 
 import numpy as np
-import torch
+from disease_codification import logger
 from disease_codification.custom_io import create_dir_if_dont_exist, load_mappings, load_pickle, save_as_pickle
 from disease_codification.flair_utils import read_augmentation_corpora, read_corpus
 from disease_codification.gcp import download_blob_file, upload_blob_file
@@ -19,8 +19,6 @@ from sklearn.metrics import average_precision_score, classification_report, f1_s
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.preprocessing import MultiLabelBinarizer
 from xgboost import XGBClassifier
-from disease_codification import logger
-import multiprocessing
 
 
 class Ranker:
@@ -32,7 +30,6 @@ class Ranker:
         cluster_classifier={},
         cluster_label_binarizer={},
         cluster_tfidf: Dict[str, TfidfVectorizer] = {},
-        tree_method: str = "exact",
     ):
         self.indexers_path: Path = indexers_path
         self.models_path: Path = models_path
@@ -141,7 +138,6 @@ class Ranker:
                     sentence.embedding.to("cpu")
             transformer_embeddings = np.array([sentence.embedding.to("cpu").numpy() for sentence in sentences])
             embeddings = np.hstack((embeddings.toarray(), transformer_embeddings))
-        logger.info("Got embeddings")
         return embeddings
 
     def train(
@@ -163,7 +159,10 @@ class Ranker:
         n_jobs_ova: Union[float, int] = 1,
         n_jobs_xgb: Union[float, int] = -1,
         scale_pos_weight: str = "max",
-        tree_method: str = "exact",
+        tree_method: str = "auto",
+        booster: str = "dart",  # gbtree gblinear
+        subsample: float = 0.6,
+        colsample_bytree: float = 0.6,
     ):
         clusters_to_train = (
             self.clusters[train_starting_from_cluster:]
@@ -180,7 +179,7 @@ class Ranker:
             n_jobs_xgb = max(1, int(multiprocessing.cpu_count() * n_jobs_xgb))
         for i, cluster in enumerate(clusters_to_train):
             logger.info(f"Training for cluster {cluster} - {i}/{len_clusters}")
-            self._train_cluster(
+            self.train_cluster(
                 cluster,
                 upload_to_gcp=upload_to_gcp,
                 split_types_train=split_types_train,
@@ -193,11 +192,14 @@ class Ranker:
                 n_jobs_xgb=n_jobs_xgb,
                 scale_pos_weight=scale_pos_weight,
                 tree_method=tree_method,
+                booster=booster,
+                subsample=subsample,
+                colsample_bytree=colsample_bytree,
             )
 
         logger.info("Training Complete")
 
-    def _train_cluster(
+    def train_cluster(
         self,
         cluster: str,
         upload_to_gcp: bool = False,
@@ -214,8 +216,11 @@ class Ranker:
         log_statistics_while_train: bool = True,
         n_jobs_ova: int = 1,
         n_jobs_xgb: int = 1,
-        scale_pos_weight: str = "mean",  # mean, max
-        tree_method: str = "exact",
+        scale_pos_weight: str = "max",  # mean, max
+        tree_method: str = "auto",  # hist exact
+        booster: str = "dart",  # gbtree gblinear
+        subsample: float = 0.6,
+        colsample_bytree: float = 0.6,
     ):
         self._set_multi_label_binarizer(cluster)
         sentences = self._read_sentences(
@@ -242,14 +247,19 @@ class Ranker:
         logger.info(f"CPU to use: OVA-{n_jobs_ova}, XGBoost-{n_jobs_xgb}")
         logger.info(f"Tree method: {tree_method}")
         logger.info(f"Scale pos weight: {scale_pos_weight}")
+        logger.info(f"Booster: {booster}")
+        logger.info(f"Subsample: {subsample}-{colsample_bytree}")
 
         xgb_classifier = XGBClassifier(
+            objective="binary:logistic",
             eval_metric="logloss",
             use_label_encoder=False,
             tree_method=tree_method,
             n_jobs=n_jobs_xgb,
             scale_pos_weight=scale_pos_weight,
-            verbosity=1,
+            subsample=subsample,
+            colsample_bytree=colsample_bytree,
+            booster=booster,
         )
         clf = OneVsRestClassifier(xgb_classifier, n_jobs=n_jobs_ova).fit(embeddings, labels)
         self.cluster_classifier[cluster] = clf
