@@ -1,12 +1,10 @@
-from collections import defaultdict
 import itertools
+from collections import defaultdict
 from pathlib import Path
-import re
 from typing import Dict, List
 
-from black import transform_line
-
-from disease_codification.custom_io import create_dir_if_dont_exist, load_mappings, load_pickle, write_fasttext_file
+from disease_codification import logger
+from disease_codification.custom_io import create_dir_if_dont_exist, load_mappings, write_fasttext_file
 from disease_codification.flair_utils import (
     CustomMultiCorpus,
     get_label_value,
@@ -16,10 +14,9 @@ from disease_codification.flair_utils import (
 )
 from disease_codification.gcp import download_blob_file, upload_blob_file
 from disease_codification.metrics import Metrics, calculate_mean_average_precision, calculate_summary
-from disease_codification.process_dataset.mapper import Augmentation, mapper_process_function
-from flair.models import TextClassifier
+from disease_codification.process_dataset.mapper import Augmentation
 from flair.data import Sentence
-from disease_codification import logger
+from flair.models import TextClassifier
 
 
 class Matcher:

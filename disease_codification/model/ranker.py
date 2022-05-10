@@ -15,7 +15,7 @@ from disease_codification.utils import chunks, label_in_cluster
 from flair.data import MultiCorpus, Sentence
 from flair.embeddings import TransformerDocumentEmbeddings
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics import average_precision_score, classification_report, f1_score
+from sklearn.metrics import average_precision_score, f1_score
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.preprocessing import MultiLabelBinarizer
 from xgboost import XGBClassifier
