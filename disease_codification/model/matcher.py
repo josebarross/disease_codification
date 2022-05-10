@@ -46,7 +46,7 @@ class Matcher:
 
     @classmethod
     def create_directories(cls, models_path: Path, indexer: Path, transformers: Dict[str, int]):
-        for transformer, count in transformers.keys():
+        for transformer, count in transformers.items():
             name = f"{transformer}-{count}"
             create_dir_if_dont_exist(models_path / indexer / "matcher" / name.split("/")[0] / name.split("/")[1])
         create_dir_if_dont_exist(models_path / indexer / "incorrect-matcher")
