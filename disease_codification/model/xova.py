@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List
+from typing import Dict, List
 
 from matplotlib.pyplot import get_figlabels
 from disease_codification.custom_io import load_mappings
@@ -29,11 +29,20 @@ class XOVA:
         indexers_path: Path,
         models_path: Path,
         indexer: str,
+        matcher_transformers: Dict[str, int] = {
+            "PlanTL-GOB-ES/roberta-base-biomedical-es": 1,
+            "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es": 1,
+            "PlanTL-GOB-ES/roberta-large-bne": 1,
+            "PlanTL-GOB-ES/roberta-base-bne": 1,
+            "dccuchile/bert-base-spanish-wwm-cased": 1,
+        },
         load_ranker_from_gcp: bool = False,
         load_matcher_from_gcp: bool = False,
     ):
         ranker = Ranker.load(indexers_path, models_path, indexer, load_from_gcp=load_ranker_from_gcp)
-        matcher = Matcher.load(indexers_path, models_path, indexer, load_from_gcp=load_matcher_from_gcp)
+        matcher = Matcher.load(
+            indexers_path, models_path, indexer, transformers=matcher_transformers, load_from_gcp=load_matcher_from_gcp
+        )
         return cls(indexers_path, models_path, indexer, ranker, matcher)
 
     def train(
