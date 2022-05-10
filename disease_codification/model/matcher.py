@@ -81,11 +81,15 @@ class Matcher:
         for name, classifier in self.classifiers.items():
             classifier.save(self.models_path / self.indexer / "matcher" / name / "final-model.pt")
 
-    def upload_to_gcp(self):
-        for transformer, count in self.transformers.items():
-            name = f"{transformer}-{count}"
-            filename = f"{self.indexer}/matcher/{name}/final-model.pt"
+    def upload_to_gcp(self, transformer_name: str = None):
+        if transformer_name:
+            filename = f"{self.indexer}/matcher/{transformer_name}/final-model.pt"
             upload_blob_file(self.models_path / filename, filename)
+        else:
+            for transformer, count in self.transformers.items():
+                name = f"{transformer}-{count}"
+                filename = f"{self.indexer}/matcher/{name}/final-model.pt"
+                upload_blob_file(self.models_path / filename, filename)
 
     def train(
         self,
@@ -129,7 +133,7 @@ class Matcher:
                 save_model_each_k_epochs=save_model_each_k_epochs,
             )
             if upload_to_gcp:
-                self.upload_to_gcp()
+                self.upload_to_gcp(transformer_name=name)
             self.eval([s for s in corpus.dev], transformer_name=name)
             self.eval([s for s in corpus.test], transformer_name=name)
 
