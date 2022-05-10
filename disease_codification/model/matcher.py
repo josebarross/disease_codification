@@ -1,7 +1,7 @@
 import itertools
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Union
 
 from disease_codification import logger
 from disease_codification.custom_io import create_dir_if_dont_exist, load_mappings, write_fasttext_file
@@ -99,7 +99,7 @@ class Matcher:
             Augmentation.descriptions_labels,
         ],
         max_epochs: int = 15,
-        mini_batch_size: int = 10,
+        mini_batch_size: Union[int, List[int]] = 10,
         remove_after_running: bool = False,
         downsample: int = 0.0,
         train_with_dev: bool = True,
@@ -113,7 +113,7 @@ class Matcher:
             augmentation, self.indexers_path, self.indexer, "matcher", "matcher"
         )
         multi_corpus = CustomMultiCorpus(corpora)
-        for transformer, count in self.transformers.items():
+        for i, (transformer, count) in enumerate(self.transformers.items()):
             name = f"{transformer}-{count}"
             filepath = create_dir_if_dont_exist(
                 self.models_path / self.indexer / "matcher" / name.split("/")[0] / name.split("/")[1]
@@ -123,7 +123,7 @@ class Matcher:
                 multi_corpus,
                 filepath,
                 max_epochs=max_epochs,
-                mini_batch_size=mini_batch_size,
+                mini_batch_size=mini_batch_size if type(mini_batch_size) == int else mini_batch_size[i],
                 remove_after_running=remove_after_running,
                 downsample=downsample,
                 train_with_dev=train_with_dev,
