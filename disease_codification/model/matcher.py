@@ -1,7 +1,10 @@
 from collections import defaultdict
 import itertools
 from pathlib import Path
-from typing import List
+import re
+from typing import Dict, List
+
+from black import transform_line
 
 from disease_codification.custom_io import create_dir_if_dont_exist, load_mappings, load_pickle, write_fasttext_file
 from disease_codification.flair_utils import (
@@ -15,40 +18,77 @@ from disease_codification.gcp import download_blob_file, upload_blob_file
 from disease_codification.metrics import Metrics, calculate_mean_average_precision, calculate_summary
 from disease_codification.process_dataset.mapper import Augmentation, mapper_process_function
 from flair.models import TextClassifier
+from flair.data import Sentence
 from disease_codification import logger
 
 
 class Matcher:
-    def __init__(self, indexers_path: Path, models_path: Path, indexer: str, classifier: TextClassifier = None):
+    def __init__(
+        self,
+        indexers_path: Path,
+        models_path: Path,
+        indexer: str,
+        transformers: Dict[str, int] = {
+            "PlanTL-GOB-ES/roberta-base-biomedical-es": 1,
+            "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es": 1,
+            "PlanTL-GOB-ES/roberta-large-bne": 1,
+            "PlanTL-GOB-ES/roberta-base-bne": 1,
+            "dccuchile/bert-base-spanish-wwm-cased": 1,
+            "CenIA/albert-xxlarge-spanish": 1,
+        },
+        classifiers: Dict[str, TextClassifier] = {},
+    ):
         # Matcher is trained by the indexers in the order they are provided, the one to predict should be the last provided
         self.indexers_path = indexers_path
         self.indexer = indexer
         self.models_path = models_path
-        self.classifier = classifier
+        self.transformers = transformers
+        self.classifiers = classifiers
         self.mappings, self.clusters, self.multi_cluster = load_mappings(indexers_path, indexer)
-        Matcher.create_directories(models_path, indexer)
+        Matcher.create_directories(models_path, indexer, self.transformers)
 
     @classmethod
-    def create_directories(cls, models_path, indexer):
-        create_dir_if_dont_exist(models_path / indexer)
-        create_dir_if_dont_exist(models_path / indexer / "matcher")
+    def create_directories(cls, models_path: Path, indexer: Path, transformers: Dict[str, int]):
+        for transformer, count in transformers.keys():
+            name = f"{transformer}-{count}"
+            create_dir_if_dont_exist(models_path / indexer / "matcher" / name.split("/")[0] / name.split("/")[1])
         create_dir_if_dont_exist(models_path / indexer / "incorrect-matcher")
 
     @classmethod
-    def load(cls, indexers_path, models_path, indexer, load_from_gcp: bool = True):
-        cls.create_directories(models_path, indexer)
-        filename = f"{indexer}/matcher/final-model.pt"
-        if load_from_gcp:
-            download_blob_file(filename, models_path / filename)
-        classifier = TextClassifier.load(models_path / filename)
-        return cls(indexers_path, models_path, indexer, classifier)
+    def load(
+        cls,
+        indexers_path: Path,
+        models_path: Path,
+        indexer: str,
+        transformers: Dict[str, int] = {
+            "PlanTL-GOB-ES/roberta-base-biomedical-es": 1,
+            "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es": 1,
+            "PlanTL-GOB-ES/roberta-large-bne": 1,
+            "PlanTL-GOB-ES/roberta-base-bne": 1,
+            "dccuchile/bert-base-spanish-wwm-cased": 1,
+            "CenIA/albert-xxlarge-spanish": 1,
+        },
+        load_from_gcp: bool = False,
+    ):
+        cls.create_directories(models_path, indexer, transformers)
+        classifiers = {}
+        for transformer, count in transformers.items():
+            name = f"{transformer}-{count}"
+            filename = f"{indexer}/matcher/{name}/final-model.pt"
+            if load_from_gcp:
+                download_blob_file(filename, models_path / filename)
+            classifiers[name] = TextClassifier.load(models_path / filename)
+        return cls(indexers_path, models_path, indexer, transformers, classifiers)
 
     def save(self):
-        self.classifier.save(self.models_path / self.indexer / "matcher" / "final-model.pt")
+        for name, classifier in self.classifiers.items():
+            classifier.save(self.models_path / self.indexer / "matcher" / name / "final-model.pt")
 
     def upload_to_gcp(self):
-        filename = f"{self.indexer}/matcher/final-model.pt"
-        upload_blob_file(self.models_path / filename, filename)
+        for transformer, count in self.transformers.items():
+            name = f"{transformer}-{count}"
+            filename = f"{self.indexer}/matcher/{name}/final-model.pt"
+            upload_blob_file(self.models_path / filename, filename)
 
     def train(
         self,
@@ -63,7 +103,6 @@ class Matcher:
         downsample: int = 0.0,
         train_with_dev: bool = True,
         layers="-1",
-        transformer_name="PlanTL-GOB-ES/roberta-base-biomedical-es",
         num_workers=2,
         save_model_each_k_epochs: int = 0,
     ):
@@ -73,34 +112,54 @@ class Matcher:
             augmentation, self.indexers_path, self.indexer, "matcher", "matcher"
         )
         multi_corpus = CustomMultiCorpus(corpora)
-        filepath = f"{self.indexer}/matcher"
-        self.classifier = train_transformer_classifier(
-            self.classifier,
-            multi_corpus,
-            self.models_path / filepath,
-            max_epochs=max_epochs,
-            mini_batch_size=mini_batch_size,
-            remove_after_running=remove_after_running,
-            downsample=downsample,
-            train_with_dev=train_with_dev,
-            layers=layers,
-            transformer_name=transformer_name,
-            num_workers=num_workers,
-            save_model_each_k_epochs=save_model_each_k_epochs,
-        )
-        if upload_to_gcp:
-            self.upload_to_gcp()
-        self.eval([s for s in corpus.dev])
-        self.eval([s for s in corpus.test])
+        for transformer, count in self.transformers.items():
+            name = f"{transformer}-{count}"
+            filepath = create_dir_if_dont_exist(
+                self.models_path / self.indexer / "matcher" / name.split("/")[0] / name.split("/")[1]
+            )
+            self.classifiers[name] = train_transformer_classifier(
+                self.classifiers.get(name),
+                multi_corpus,
+                filepath,
+                max_epochs=max_epochs,
+                mini_batch_size=mini_batch_size,
+                remove_after_running=remove_after_running,
+                downsample=downsample,
+                train_with_dev=train_with_dev,
+                layers=layers,
+                transformer_name=transformer,
+                num_workers=num_workers,
+                save_model_each_k_epochs=save_model_each_k_epochs,
+            )
+            if upload_to_gcp:
+                self.upload_to_gcp()
+            self.eval([s for s in corpus.dev], transformer_name=name)
+            self.eval([s for s in corpus.test], transformer_name=name)
 
-    def predict(self, sentences, return_probabilities=True):
+    def predict(self, sentences: List[Sentence], return_probabilities=True, transformer_name: str = None):
         logger.info("Predicting matcher")
         label_name = "matcher_proba" if return_probabilities else "matcher"
-        self.classifier.predict(
-            sentences, label_name=label_name, return_probabilities_for_all_classes=return_probabilities
-        )
+        if transformer_name:
+            self.classifiers[transformer_name].predict(
+                sentences, label_name=label_name, return_probabilities_for_all_classes=return_probabilities
+            )
+        else:
+            for name, classifier in self.classifiers.items():
+                classifier.predict(
+                    sentences, label_name=name, return_probabilities_for_all_classes=return_probabilities
+                )
+            for sentence in sentences:
+                labels = defaultdict(list)
+                for name in self.classifiers.keys():
+                    for label in sentence.get_labels(name):
+                        labels[get_label_value(label)].append(label.score)
+                for label, scores in labels.items():
+                    score = max(scores)
+                    sentence.add_label(label_name, label, score)
 
-    def eval(self, sentences, eval_metrics: List[Metrics] = [Metrics.map]):
+    def eval(
+        self, sentences, transformer_name: str = None, eval_metrics: List[Metrics] = [Metrics.map, Metrics.summary]
+    ):
         if not sentences:
             return
         logger.info("Evaluation of Matcher")
@@ -109,10 +168,10 @@ class Matcher:
                 itertools.chain.from_iterable(self.mappings.values()) if self.multi_cluster else self.mappings.values()
             )
             if metric == Metrics.map:
-                self.predict(sentences, return_probabilities=True)
+                self.predict(sentences, return_probabilities=True, transformer_name=transformer_name)
                 calculate_mean_average_precision(sentences, labels_list, label_name_predicted="matcher_proba")
             elif metric == Metrics.summary:
-                self.predict(sentences, return_probabilities=False)
+                self.predict(sentences, return_probabilities=False, transformer_name=transformer_name)
                 calculate_summary(sentences, labels_list, label_name_predicted="matcher")
 
     def create_corpus_of_incorrectly_predicted(self):
