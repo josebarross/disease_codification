@@ -44,8 +44,9 @@ class Matcher:
     @classmethod
     def create_directories(cls, models_path: Path, indexer: Path, transformers: Dict[str, int]):
         for transformer, count in transformers.items():
-            name = f"{transformer}-{count}"
-            create_dir_if_dont_exist(models_path / indexer / "matcher" / name.split("/")[0] / name.split("/")[1])
+            for c in range(count):
+                name = f"{transformer}-{c}"
+                create_dir_if_dont_exist(models_path / indexer / "matcher" / name.split("/")[0] / name.split("/")[1])
         create_dir_if_dont_exist(models_path / indexer / "incorrect-matcher")
 
     @classmethod
@@ -64,11 +65,12 @@ class Matcher:
         cls.create_directories(models_path, indexer, transformers)
         classifiers = {}
         for transformer, count in transformers.items():
-            name = f"{transformer}-{count}"
-            filename = f"{indexer}/matcher/{name}/final-model.pt"
-            if load_from_gcp:
-                download_blob_file(filename, models_path / filename)
-            classifiers[name] = TextClassifier.load(models_path / filename)
+            for c in range(count):
+                name = f"{transformer}-{c}"
+                filename = f"{indexer}/matcher/{name}/final-model.pt"
+                if load_from_gcp:
+                    download_blob_file(filename, models_path / filename)
+                classifiers[name] = TextClassifier.load(models_path / filename)
         return cls(indexers_path, models_path, indexer, transformers, classifiers)
 
     def save(self):
@@ -81,9 +83,10 @@ class Matcher:
             upload_blob_file(self.models_path / filename, filename)
         else:
             for transformer, count in self.transformers.items():
-                name = f"{transformer}-{count}"
-                filename = f"{self.indexer}/matcher/{name}/final-model.pt"
-                upload_blob_file(self.models_path / filename, filename)
+                for c in range(count):
+                    name = f"{transformer}-{c}"
+                    filename = f"{self.indexer}/matcher/{name}/final-model.pt"
+                    upload_blob_file(self.models_path / filename, filename)
 
     def train(
         self,
@@ -108,28 +111,29 @@ class Matcher:
         )
         multi_corpus = CustomMultiCorpus(corpora)
         for i, (transformer, count) in enumerate(self.transformers.items()):
-            name = f"{transformer}-{count}"
-            filepath = create_dir_if_dont_exist(
-                self.models_path / self.indexer / "matcher" / name.split("/")[0] / name.split("/")[1]
-            )
-            self.classifiers[name] = train_transformer_classifier(
-                self.classifiers.get(name),
-                multi_corpus,
-                filepath,
-                max_epochs=max_epochs,
-                mini_batch_size=mini_batch_size if type(mini_batch_size) == int else mini_batch_size[i],
-                remove_after_running=remove_after_running,
-                downsample=downsample,
-                train_with_dev=train_with_dev,
-                layers=layers,
-                transformer_name=transformer,
-                num_workers=num_workers,
-                save_model_each_k_epochs=save_model_each_k_epochs,
-            )
-            if upload_to_gcp:
-                self.upload_to_gcp(transformer_name=name)
-            self.eval([s for s in corpus.dev], transformer_name=name)
-            self.eval([s for s in corpus.test], transformer_name=name)
+            for c in range(count):
+                name = f"{transformer}-{c}"
+                filepath = create_dir_if_dont_exist(
+                    self.models_path / self.indexer / "matcher" / name.split("/")[0] / name.split("/")[1]
+                )
+                self.classifiers[name] = train_transformer_classifier(
+                    self.classifiers.get(name),
+                    multi_corpus,
+                    filepath,
+                    max_epochs=max_epochs,
+                    mini_batch_size=mini_batch_size if type(mini_batch_size) == int else mini_batch_size[i],
+                    remove_after_running=remove_after_running,
+                    downsample=downsample,
+                    train_with_dev=train_with_dev,
+                    layers=layers,
+                    transformer_name=transformer,
+                    num_workers=num_workers,
+                    save_model_each_k_epochs=save_model_each_k_epochs,
+                )
+                if upload_to_gcp:
+                    self.upload_to_gcp(transformer_name=name)
+                self.eval([s for s in corpus.dev], transformer_name=name)
+                self.eval([s for s in corpus.test], transformer_name=name)
 
     def predict(self, sentences: List[Sentence], return_probabilities=True, transformer_name: str = None):
         logger.info("Predicting matcher")
