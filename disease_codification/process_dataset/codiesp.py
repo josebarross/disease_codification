@@ -165,4 +165,4 @@ def assign_label(label, subtask="diagnostics"):
             if cluster.split("-")[0] <= category <= cluster.split("-")[1]:
                 return cluster
     else:
-        return label[:2] if label.startswith("0") or label.startswith("b") else label[0]
+        return label[0]
