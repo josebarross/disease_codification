@@ -25,10 +25,10 @@ class Matcher:
         indexers_path: Path,
         models_path: Path,
         indexer: str,
-        transformers: Dict[str, int] = {
-            "PlanTL-GOB-ES/roberta-base-biomedical-es": 5,
-            "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es": 5,
-            "dccuchile/bert-base-spanish-wwm-cased": 5,
+        transformers: Dict[str, List[int]] = {
+            "PlanTL-GOB-ES/roberta-base-biomedical-es": range(3),
+            "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es": range(1),
+            "dccuchile/bert-base-spanish-wwm-cased": range(1),
         },
         classifiers: Dict[str, TextClassifier] = {},
     ):
@@ -44,7 +44,7 @@ class Matcher:
     @classmethod
     def create_directories(cls, models_path: Path, indexer: Path, transformers: Dict[str, int]):
         for transformer, count in transformers.items():
-            for c in range(count):
+            for c in count:
                 name = f"{transformer}-{c}"
                 create_dir_if_dont_exist(models_path / indexer / "matcher" / name.split("/")[0] / name.split("/")[1])
         create_dir_if_dont_exist(models_path / indexer / "incorrect-matcher")
@@ -65,7 +65,7 @@ class Matcher:
         cls.create_directories(models_path, indexer, transformers)
         classifiers = {}
         for transformer, count in transformers.items():
-            for c in range(count):
+            for c in count:
                 name = f"{transformer}-{c}"
                 filename = f"{indexer}/matcher/{name}/final-model.pt"
                 if load_from_gcp:
@@ -83,7 +83,7 @@ class Matcher:
             upload_blob_file(self.models_path / filename, filename)
         else:
             for transformer, count in self.transformers.items():
-                for c in range(count):
+                for c in count:
                     name = f"{transformer}-{c}"
                     filename = f"{self.indexer}/matcher/{name}/final-model.pt"
                     upload_blob_file(self.models_path / filename, filename)
@@ -111,7 +111,7 @@ class Matcher:
         )
         multi_corpus = CustomMultiCorpus(corpora)
         for i, (transformer, count) in enumerate(self.transformers.items()):
-            for c in range(count):
+            for c in count:
                 name = f"{transformer}-{c}"
                 filepath = create_dir_if_dont_exist(
                     self.models_path / self.indexer / "matcher" / name.split("/")[0] / name.split("/")[1]

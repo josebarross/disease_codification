@@ -30,9 +30,9 @@ class XOVA:
         models_path: Path,
         indexer: str,
         matcher_transformers: Dict[str, int] = {
-            "PlanTL-GOB-ES/roberta-base-biomedical-es": 5,
-            "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es": 5,
-            "dccuchile/bert-base-spanish-wwm-cased": 5,
+            "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es": range(3),
+            "PlanTL-GOB-ES/roberta-base-biomedical-es": range(1),
+            "dccuchile/bert-base-spanish-wwm-cased": range(1),
         },
         load_ranker_from_gcp: bool = False,
         load_matcher_from_gcp: bool = False,
