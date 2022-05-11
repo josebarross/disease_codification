@@ -26,12 +26,9 @@ class Matcher:
         models_path: Path,
         indexer: str,
         transformers: Dict[str, int] = {
-            "PlanTL-GOB-ES/roberta-base-biomedical-es": 1,
-            "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es": 1,
-            "PlanTL-GOB-ES/roberta-large-bne": 1,
-            "PlanTL-GOB-ES/roberta-base-bne": 1,
-            "dccuchile/bert-base-spanish-wwm-cased": 1,
-            "CenIA/albert-xxlarge-spanish": 1,
+            "PlanTL-GOB-ES/roberta-base-biomedical-es": 5,
+            "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es": 5,
+            "dccuchile/bert-base-spanish-wwm-cased": 5,
         },
         classifiers: Dict[str, TextClassifier] = {},
     ):
@@ -58,12 +55,9 @@ class Matcher:
         models_path: Path,
         indexer: str,
         transformers: Dict[str, int] = {
-            "PlanTL-GOB-ES/roberta-base-biomedical-es": 1,
-            "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es": 1,
-            "PlanTL-GOB-ES/roberta-large-bne": 1,
-            "PlanTL-GOB-ES/roberta-base-bne": 1,
-            "dccuchile/bert-base-spanish-wwm-cased": 1,
-            "CenIA/albert-xxlarge-spanish": 1,
+            "PlanTL-GOB-ES/roberta-base-biomedical-es": 5,
+            "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es": 5,
+            "dccuchile/bert-base-spanish-wwm-cased": 5,
         },
         load_from_gcp: bool = False,
     ):
@@ -146,6 +140,7 @@ class Matcher:
             )
         else:
             for name, classifier in self.classifiers.items():
+                logger.info(f"Predicting {name}")
                 classifier.predict(
                     sentences, label_name=name, return_probabilities_for_all_classes=return_probabilities
                 )

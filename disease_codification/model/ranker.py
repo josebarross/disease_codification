@@ -343,7 +343,7 @@ class Ranker:
     def save(self):
         logger.info("Saving model")
         for cluster in self.clusters:
-            self.save_cluster(self, cluster)
+            self.save_cluster(cluster)
 
     def save_cluster(self, cluster):
         logger.info(f"Saving model created for cluster {cluster}")
