@@ -60,8 +60,8 @@ def process_sentence(corpuses_path: Path) -> pd.DataFrame:
             if length > 512:
                 amount += 1
             sentences.append(sentence)
-        logger.info("Documents with more than 512 tokens: ", amount)
-        logger.info("Average length: ", statistics.mean(lens))
+        logger.info(f"Documents with more than 512 tokens: {amount}")
+        logger.info(f"Average length: {statistics.mean(lens)}")
         df_split_type["sentence"] = sentences
         df_split_type["labels"] = df_split_type["code"]
         df = pd.concat([df, df_split_type])
