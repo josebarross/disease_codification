@@ -71,7 +71,7 @@ class Matcher:
                 if load_from_gcp:
                     download_blob_file(filename, models_path / filename)
                 classifiers[name] = TextClassifier.load(models_path / filename)
-        return cls(indexers_path, models_path, indexer, transformers, classifiers)
+        return cls(indexers_path, models_path, indexer, transformers=transformers, classifiers=classifiers)
 
     def save(self):
         for name, classifier in self.classifiers.items():

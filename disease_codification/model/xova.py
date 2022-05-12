@@ -51,7 +51,7 @@ class XOVA:
         matcher = Matcher.load(
             indexers_path, models_path, indexer, transformers=matcher_transformers, load_from_gcp=load_matcher_from_gcp
         )
-        return cls(indexers_path, models_path, indexer, ranker, matcher)
+        return cls(indexers_path, models_path, indexer, ranker=ranker, matcher=matcher)
 
     def train(
         self,
