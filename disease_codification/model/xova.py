@@ -14,13 +14,23 @@ from disease_codification import logger
 
 class XOVA:
     def __init__(
-        self, indexers_path: Path, models_path: Path, indexer: str, ranker: Ranker = None, matcher: Matcher = None
+        self,
+        indexers_path: Path,
+        models_path: Path,
+        indexer: str,
+        matcher_transformers: Dict[str, int] = {
+            "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es": [0],
+            "PlanTL-GOB-ES/roberta-base-biomedical-es": [],
+            "dccuchile/bert-base-spanish-wwm-cased": [],
+        },
+        ranker: Ranker = None,
+        matcher: Matcher = None,
     ):
         self.indexers_path = indexers_path
         self.models_path = models_path
         self.indexer = indexer
         self.ranker = ranker or Ranker(indexers_path, models_path, indexer)
-        self.matcher = matcher or Matcher(indexers_path, models_path, indexer)
+        self.matcher = matcher or Matcher(indexers_path, models_path, indexer, transformers=matcher_transformers)
         self.mappings, self.clusters, self.multi_cluster = load_mappings(indexers_path, indexer)
 
     @classmethod
@@ -30,9 +40,9 @@ class XOVA:
         models_path: Path,
         indexer: str,
         matcher_transformers: Dict[str, int] = {
-            "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es": range(3),
-            "PlanTL-GOB-ES/roberta-base-biomedical-es": range(1),
-            "dccuchile/bert-base-spanish-wwm-cased": range(1),
+            "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es": [0],
+            "PlanTL-GOB-ES/roberta-base-biomedical-es": [],
+            "dccuchile/bert-base-spanish-wwm-cased": [],
         },
         load_ranker_from_gcp: bool = False,
         load_matcher_from_gcp: bool = False,

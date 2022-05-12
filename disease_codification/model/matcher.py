@@ -26,9 +26,9 @@ class Matcher:
         models_path: Path,
         indexer: str,
         transformers: Dict[str, List[int]] = {
-            "PlanTL-GOB-ES/roberta-base-biomedical-es": range(3),
-            "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es": range(1),
-            "dccuchile/bert-base-spanish-wwm-cased": range(1),
+            "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es": [0],
+            "PlanTL-GOB-ES/roberta-base-biomedical-es": [],
+            "dccuchile/bert-base-spanish-wwm-cased": [],
         },
         classifiers: Dict[str, TextClassifier] = {},
     ):
@@ -55,10 +55,10 @@ class Matcher:
         indexers_path: Path,
         models_path: Path,
         indexer: str,
-        transformers: Dict[str, int] = {
-            "PlanTL-GOB-ES/roberta-base-biomedical-es": 5,
-            "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es": 5,
-            "dccuchile/bert-base-spanish-wwm-cased": 5,
+        transformers: Dict[str, List[int]] = {
+            "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es": [0],
+            "PlanTL-GOB-ES/roberta-base-biomedical-es": [],
+            "dccuchile/bert-base-spanish-wwm-cased": [],
         },
         load_from_gcp: bool = False,
     ):
