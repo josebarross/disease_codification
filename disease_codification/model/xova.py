@@ -12,7 +12,7 @@ from flair.data import Sentence
 from disease_codification import logger
 
 
-class XOVA:
+class DACModel:
     def __init__(
         self,
         indexers_path: Path,
