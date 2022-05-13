@@ -17,6 +17,7 @@ from disease_codification.metrics import Metrics, calculate_mean_average_precisi
 from disease_codification.process_dataset.mapper import Augmentation
 from flair.data import Sentence
 from flair.models import TextClassifier
+from flair import set_seed
 
 
 class Matcher:
@@ -96,6 +97,7 @@ class Matcher:
         filepath = create_dir_if_dont_exist(
             self.models_path / self.indexer / "matcher" / self.name.split("/")[0] / self.name.split("/")[1]
         )
+        set_seed(self.seed)
         self.classifier = train_transformer_classifier(
             self.classifier,
             multi_corpus,

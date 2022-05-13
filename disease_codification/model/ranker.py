@@ -30,6 +30,7 @@ class Ranker:
         cluster_classifier={},
         cluster_label_binarizer={},
         cluster_tfidf: Dict[str, TfidfVectorizer] = {},
+        seed: int = 0,
     ):
         self.indexers_path: Path = indexers_path
         self.models_path: Path = models_path
@@ -38,29 +39,32 @@ class Ranker:
         self.cluster_label_binarizer: Dict[str, MultiLabelBinarizer] = cluster_label_binarizer
         self.cluster_tfidf = cluster_tfidf
         self.mappings, self.clusters, self.multi_cluster = load_mappings(self.indexers_path, self.indexer)
+        self.seed = seed
+        self.dir_name = f"ranker-{seed}"
         self.transformer_for_embedding = None
-        Ranker.create_directories(models_path, indexer)
+        Ranker.create_directories(models_path, indexer, seed)
 
     @classmethod
-    def create_directories(cls, models_path, indexer):
+    def create_directories(cls, models_path: Path, indexer: str, seed: int):
         create_dir_if_dont_exist(models_path / indexer)
-        create_dir_if_dont_exist(models_path / indexer / "ranker")
+        create_dir_if_dont_exist(models_path / indexer / f"ranker-{seed}")
 
     @classmethod
-    def load(cls, indexers_path: Path, models_path: Path, indexer: str, load_from_gcp: bool = False):
-        cls.create_directories(models_path, indexer)
+    def load(cls, indexers_path: Path, models_path: Path, indexer: str, load_from_gcp: bool = False, seed: int = 0):
+        cls.create_directories(models_path, indexer, seed)
         _, clusters, _ = load_mappings(indexers_path, indexer)
         cluster_classifier = {}
         cluster_label_binarizer = {}
         cluster_tfidf = {}
+        dir_name = f"ranker-{seed}"
         for cluster in clusters:
-            label_binarizer_path = models_path / indexer / "ranker" / f"label_binarizer_{cluster}.pickle"
-            classifier_path = models_path / indexer / "ranker" / f"classifier_{cluster}.pickle"
-            tfidf_path = models_path / indexer / "ranker" / f"tfidf_{cluster}.pickle"
+            label_binarizer_path = models_path / indexer / dir_name / f"label_binarizer_{cluster}.pickle"
+            classifier_path = models_path / indexer / dir_name / f"classifier_{cluster}.pickle"
+            tfidf_path = models_path / indexer / dir_name / f"tfidf_{cluster}.pickle"
             if load_from_gcp:
-                download_blob_file(f"{indexer}/ranker/label_binarizer_{cluster}.pickle", label_binarizer_path)
-                download_blob_file(f"{indexer}/ranker/classifier_{cluster}.pickle", classifier_path)
-                download_blob_file(f"{indexer}/ranker/tfidf_{cluster}.pickle", tfidf_path)
+                download_blob_file(f"{indexer}/{dir_name}/label_binarizer_{cluster}.pickle", label_binarizer_path)
+                download_blob_file(f"{indexer}/{dir_name}/classifier_{cluster}.pickle", classifier_path)
+                download_blob_file(f"{indexer}/{dir_name}/tfidf_{cluster}.pickle", tfidf_path)
             cluster_label_binarizer[cluster] = load_pickle(label_binarizer_path)
             try:
                 cluster_classifier[cluster] = load_pickle(classifier_path)
@@ -75,6 +79,7 @@ class Ranker:
             cluster_classifier=cluster_classifier,
             cluster_label_binarizer=cluster_label_binarizer,
             cluster_tfidf=cluster_tfidf,
+            seed=seed,
         )
 
     def _read_sentences(
@@ -260,6 +265,7 @@ class Ranker:
             subsample=subsample,
             colsample_bytree=colsample_bytree,
             booster=booster,
+            seed=self.seed,
         )
         clf = OneVsRestClassifier(xgb_classifier, n_jobs=n_jobs_ova).fit(embeddings, labels)
         self.cluster_classifier[cluster] = clf
@@ -347,7 +353,7 @@ class Ranker:
 
     def save_cluster(self, cluster):
         logger.info(f"Saving model created for cluster {cluster}")
-        base_path = self.models_path / self.indexer / "ranker"
+        base_path = self.models_path / self.indexer / self.dir_name
         save_as_pickle(self.cluster_label_binarizer[cluster], base_path / f"label_binarizer_{cluster}.pickle")
         save_as_pickle(self.cluster_classifier[cluster], base_path / f"classifier_{cluster}.pickle")
         save_as_pickle(self.cluster_tfidf[cluster], base_path / f"tfidf_{cluster}.pickle")
@@ -359,12 +365,14 @@ class Ranker:
 
     def upload_cluster_to_gcp(self, cluster):
         logger.info(f"Uploading model created for cluster {cluster} to GCP")
-        base_path = self.models_path / self.indexer / "ranker"
+        base_path = self.models_path / self.indexer / self.dir_name
         upload_blob_file(
             base_path / f"label_binarizer_{cluster}.pickle",
-            f"{self.indexer}/ranker/label_binarizer_{cluster}.pickle",
+            f"{self.indexer}/{self.dir_name}/label_binarizer_{cluster}.pickle",
         )
         upload_blob_file(
-            base_path / f"classifier_{cluster}.pickle", f"{self.indexer}/ranker/classifier_{cluster}.pickle"
+            base_path / f"classifier_{cluster}.pickle", f"{self.indexer}/{self.dir_name}/classifier_{cluster}.pickle"
         )
-        upload_blob_file(base_path / f"tfidf_{cluster}.pickle", f"{self.indexer}/ranker/tfidf_{cluster}.pickle")
+        upload_blob_file(
+            base_path / f"tfidf_{cluster}.pickle", f"{self.indexer}/{self.dir_name}/tfidf_{cluster}.pickle"
+        )
