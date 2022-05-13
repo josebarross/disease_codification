@@ -25,28 +25,25 @@ class Matcher:
         indexers_path: Path,
         models_path: Path,
         indexer: str,
-        transformers: Dict[str, List[int]] = {
-            "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es": [0],
-            "PlanTL-GOB-ES/roberta-base-biomedical-es": [],
-            "dccuchile/bert-base-spanish-wwm-cased": [],
-        },
-        classifiers: Dict[str, TextClassifier] = {},
+        transformer: str = "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es",
+        seed: int = 0,
+        classifier: TextClassifier = None,
     ):
         # Matcher is trained by the indexers in the order they are provided, the one to predict should be the last provided
         self.indexers_path = indexers_path
         self.indexer = indexer
         self.models_path = models_path
-        self.transformers = transformers
-        self.classifiers = classifiers
+        self.transformer = transformer
+        self.seed = seed
+        self.name = f"{transformer}-{seed}"
+        self.classifier = classifier
         self.mappings, self.clusters, self.multi_cluster = load_mappings(indexers_path, indexer)
-        Matcher.create_directories(models_path, indexer, self.transformers)
+        Matcher.create_directories(models_path, indexer, self.transformer, self.seed)
 
     @classmethod
-    def create_directories(cls, models_path: Path, indexer: Path, transformers: Dict[str, int]):
-        for transformer, count in transformers.items():
-            for c in count:
-                name = f"{transformer}-{c}"
-                create_dir_if_dont_exist(models_path / indexer / "matcher" / name.split("/")[0] / name.split("/")[1])
+    def create_directories(cls, models_path: Path, indexer: Path, transformer: str, seed: int):
+        name = f"{transformer}-{seed}"
+        create_dir_if_dont_exist(models_path / indexer / "matcher" / name.split("/")[0] / name.split("/")[1])
         create_dir_if_dont_exist(models_path / indexer / "incorrect-matcher")
 
     @classmethod
@@ -55,38 +52,24 @@ class Matcher:
         indexers_path: Path,
         models_path: Path,
         indexer: str,
-        transformers: Dict[str, List[int]] = {
-            "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es": [0],
-            "PlanTL-GOB-ES/roberta-base-biomedical-es": [],
-            "dccuchile/bert-base-spanish-wwm-cased": [],
-        },
+        transformer: str = "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es",
+        seed: int = 0,
         load_from_gcp: bool = False,
     ):
-        cls.create_directories(models_path, indexer, transformers)
-        classifiers = {}
-        for transformer, count in transformers.items():
-            for c in count:
-                name = f"{transformer}-{c}"
-                filename = f"{indexer}/matcher/{name}/final-model.pt"
-                if load_from_gcp:
-                    download_blob_file(filename, models_path / filename)
-                classifiers[name] = TextClassifier.load(models_path / filename)
-        return cls(indexers_path, models_path, indexer, transformers=transformers, classifiers=classifiers)
+        cls.create_directories(models_path, indexer, transformer, seed)
+        name = f"{transformer}-{seed}"
+        filename = f"{indexer}/matcher/{name}/final-model.pt"
+        if load_from_gcp:
+            download_blob_file(filename, models_path / filename)
+        classifier = TextClassifier.load(models_path / filename)
+        return cls(indexers_path, models_path, indexer, transformer=transformer, classifier=classifier, seed=seed)
 
     def save(self):
-        for name, classifier in self.classifiers.items():
-            classifier.save(self.models_path / self.indexer / "matcher" / name / "final-model.pt")
+        self.classifier.save(self.models_path / self.indexer / "matcher" / self.name / "final-model.pt")
 
-    def upload_to_gcp(self, transformer_name: str = None):
-        if transformer_name:
-            filename = f"{self.indexer}/matcher/{transformer_name}/final-model.pt"
-            upload_blob_file(self.models_path / filename, filename)
-        else:
-            for transformer, count in self.transformers.items():
-                for c in count:
-                    name = f"{transformer}-{c}"
-                    filename = f"{self.indexer}/matcher/{name}/final-model.pt"
-                    upload_blob_file(self.models_path / filename, filename)
+    def upload_to_gcp(self):
+        filename = f"{self.indexer}/matcher/{self.name}/final-model.pt"
+        upload_blob_file(self.models_path / filename, filename)
 
     def train(
         self,
@@ -96,7 +79,7 @@ class Matcher:
             Augmentation.descriptions_labels,
         ],
         max_epochs: int = 15,
-        mini_batch_size: Union[int, List[int]] = 10,
+        mini_batch_size: int = 10,
         remove_after_running: bool = False,
         downsample: int = 0.0,
         train_with_dev: bool = True,
@@ -110,56 +93,36 @@ class Matcher:
             augmentation, self.indexers_path, self.indexer, "matcher", "matcher"
         )
         multi_corpus = CustomMultiCorpus(corpora)
-        for i, (transformer, count) in enumerate(self.transformers.items()):
-            for c in count:
-                name = f"{transformer}-{c}"
-                filepath = create_dir_if_dont_exist(
-                    self.models_path / self.indexer / "matcher" / name.split("/")[0] / name.split("/")[1]
-                )
-                self.classifiers[name] = train_transformer_classifier(
-                    self.classifiers.get(name),
-                    multi_corpus,
-                    filepath,
-                    max_epochs=max_epochs,
-                    mini_batch_size=mini_batch_size if type(mini_batch_size) == int else mini_batch_size[i],
-                    remove_after_running=remove_after_running,
-                    downsample=downsample,
-                    train_with_dev=train_with_dev,
-                    layers=layers,
-                    transformer_name=transformer,
-                    num_workers=num_workers,
-                    save_model_each_k_epochs=save_model_each_k_epochs,
-                )
-                if upload_to_gcp:
-                    self.upload_to_gcp(transformer_name=name)
-                self.eval([s for s in corpus.dev], transformer_name=name)
-                self.eval([s for s in corpus.test], transformer_name=name)
+        filepath = create_dir_if_dont_exist(
+            self.models_path / self.indexer / "matcher" / self.name.split("/")[0] / self.name.split("/")[1]
+        )
+        self.classifier = train_transformer_classifier(
+            self.classifier,
+            multi_corpus,
+            filepath,
+            max_epochs=max_epochs,
+            mini_batch_size=mini_batch_size,
+            remove_after_running=remove_after_running,
+            downsample=downsample,
+            train_with_dev=train_with_dev,
+            layers=layers,
+            transformer_name=self.transformer,
+            num_workers=num_workers,
+            save_model_each_k_epochs=save_model_each_k_epochs,
+        )
+        if upload_to_gcp:
+            self.upload_to_gcp()
+        self.eval([s for s in corpus.dev])
+        self.eval([s for s in corpus.test])
 
-    def predict(self, sentences: List[Sentence], return_probabilities=True, transformer_name: str = None):
+    def predict(self, sentences: List[Sentence], return_probabilities=True):
         logger.info("Predicting matcher")
         label_name = "matcher_proba" if return_probabilities else "matcher"
-        if transformer_name:
-            self.classifiers[transformer_name].predict(
-                sentences, label_name=label_name, return_probabilities_for_all_classes=return_probabilities
-            )
-        else:
-            for name, classifier in self.classifiers.items():
-                logger.info(f"Predicting {name}")
-                classifier.predict(
-                    sentences, label_name=name, return_probabilities_for_all_classes=return_probabilities
-                )
-            for sentence in sentences:
-                labels = defaultdict(list)
-                for name in self.classifiers.keys():
-                    for label in sentence.get_labels(name):
-                        labels[get_label_value(label)].append(label.score)
-                for label, scores in labels.items():
-                    score = max(scores)
-                    sentence.add_label(label_name, label, score)
+        self.classifier.predict(
+            sentences, label_name=label_name, return_probabilities_for_all_classes=return_probabilities
+        )
 
-    def eval(
-        self, sentences, transformer_name: str = None, eval_metrics: List[Metrics] = [Metrics.map, Metrics.summary]
-    ):
+    def eval(self, sentences, eval_metrics: List[Metrics] = [Metrics.map, Metrics.summary]):
         if not sentences:
             return
         logger.info("Evaluation of Matcher")
@@ -168,10 +131,10 @@ class Matcher:
                 itertools.chain.from_iterable(self.mappings.values()) if self.multi_cluster else self.mappings.values()
             )
             if metric == Metrics.map:
-                self.predict(sentences, return_probabilities=True, transformer_name=transformer_name)
+                self.predict(sentences, return_probabilities=True)
                 calculate_mean_average_precision(sentences, labels_list, label_name_predicted="matcher_proba")
             elif metric == Metrics.summary:
-                self.predict(sentences, return_probabilities=False, transformer_name=transformer_name)
+                self.predict(sentences, return_probabilities=False)
                 calculate_summary(sentences, labels_list, label_name_predicted="matcher")
 
     def create_corpus_of_incorrectly_predicted(self):

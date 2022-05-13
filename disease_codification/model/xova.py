@@ -1,7 +1,6 @@
 from pathlib import Path
-from typing import Dict, List
+from typing import List
 
-from matplotlib.pyplot import get_figlabels
 from disease_codification.custom_io import load_mappings
 from disease_codification.flair_utils import get_label_value, read_corpus
 from disease_codification.metrics import Metrics, calculate_mean_average_precision, calculate_summary
@@ -18,11 +17,8 @@ class DACModel:
         indexers_path: Path,
         models_path: Path,
         indexer: str,
-        matcher_transformers: Dict[str, int] = {
-            "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es": [0],
-            "PlanTL-GOB-ES/roberta-base-biomedical-es": [],
-            "dccuchile/bert-base-spanish-wwm-cased": [],
-        },
+        matcher_transformer: str = "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es",
+        seed: int = 0,
         ranker: Ranker = None,
         matcher: Matcher = None,
     ):
@@ -30,7 +26,9 @@ class DACModel:
         self.models_path = models_path
         self.indexer = indexer
         self.ranker = ranker or Ranker(indexers_path, models_path, indexer)
-        self.matcher = matcher or Matcher(indexers_path, models_path, indexer, transformers=matcher_transformers)
+        self.matcher = matcher or Matcher(
+            indexers_path, models_path, indexer, transformer=matcher_transformer, seed=seed
+        )
         self.mappings, self.clusters, self.multi_cluster = load_mappings(indexers_path, indexer)
 
     @classmethod
@@ -39,19 +37,29 @@ class DACModel:
         indexers_path: Path,
         models_path: Path,
         indexer: str,
-        matcher_transformers: Dict[str, int] = {
-            "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es": [0],
-            "PlanTL-GOB-ES/roberta-base-biomedical-es": [],
-            "dccuchile/bert-base-spanish-wwm-cased": [],
-        },
+        matcher_transformer: str = "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es",
+        seed: int = 0,
         load_ranker_from_gcp: bool = False,
         load_matcher_from_gcp: bool = False,
     ):
         ranker = Ranker.load(indexers_path, models_path, indexer, load_from_gcp=load_ranker_from_gcp)
         matcher = Matcher.load(
-            indexers_path, models_path, indexer, transformers=matcher_transformers, load_from_gcp=load_matcher_from_gcp
+            indexers_path,
+            models_path,
+            indexer,
+            transformer=matcher_transformer,
+            seed=seed,
+            load_from_gcp=load_matcher_from_gcp,
         )
-        return cls(indexers_path, models_path, indexer, ranker=ranker, matcher=matcher)
+        return cls(
+            indexers_path,
+            models_path,
+            indexer,
+            ranker=ranker,
+            matcher=matcher,
+            matcher_transformer=matcher_transformer,
+            seed=seed,
+        )
 
     def train(
         self,
