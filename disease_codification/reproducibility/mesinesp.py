@@ -2,7 +2,7 @@ from pathlib import Path
 from disease_codification.corpora_downloader import download_mesinesp_corpus
 from disease_codification.gcp import upload_blob
 from disease_codification.model.indexer import Indexer
-from disease_codification.model.xova import DACModel
+from disease_codification.model.dac import DACModel
 from disease_codification import logger
 
 

@@ -1,7 +1,7 @@
 from pathlib import Path
 from disease_codification.corpora_downloader import create_directories, download_codiesp_corpus
 from disease_codification.model.indexer import Indexer
-from disease_codification.model.xova import DACModel
+from disease_codification.model.dac import DACModel
 
 
 def reproduce_model(data_path: Path):
