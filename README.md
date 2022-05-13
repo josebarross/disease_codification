@@ -25,3 +25,11 @@ BUCKET =
 ```
 
 All the defaults are in the library code.
+
+List of transformers that have been used:
+
+```
+ "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es"
+ "PlanTL-GOB-ES/roberta-base-biomedical-es"
+ "dccuchile/bert-base-spanish-wwm-cased"
+```
