@@ -3,7 +3,7 @@ import itertools
 import statistics
 from typing import List
 import numpy as np
-from sklearn.metrics import average_precision_score, classification_report
+from sklearn.metrics import average_precision_score, classification_report, f1_score
 
 from disease_codification.flair_utils import get_label_value
 from disease_codification import logger
@@ -79,3 +79,4 @@ def calculate_summary(
         logger.info(f'micro avg: {report.get("micro avg")}')
         logger.info(f'macro avg: {report.get("macro avg")}')
         logger.info(f'weighted avg: {report.get("weighted avg")}')
+    return f1_score(gold, pred, average="micro")
