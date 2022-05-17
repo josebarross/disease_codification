@@ -29,6 +29,7 @@ class DACModel:
         self.matcher = matcher or Matcher(
             indexers_path, models_path, indexer, transformer=matcher_transformer, seed=seed
         )
+        self.name = f"{matcher_transformer}-{seed}"
         self.mappings, self.clusters, self.multi_cluster = load_mappings(indexers_path, indexer)
 
     @classmethod
@@ -42,7 +43,7 @@ class DACModel:
         load_ranker_from_gcp: bool = False,
         load_matcher_from_gcp: bool = False,
     ):
-        ranker = Ranker.load(indexers_path, models_path, indexer, load_from_gcp=load_ranker_from_gcp)
+        ranker = Ranker.load(indexers_path, models_path, indexer, load_from_gcp=load_ranker_from_gcp, seed=seed)
         matcher = Matcher.load(
             indexers_path,
             models_path,
@@ -85,15 +86,17 @@ class DACModel:
         self.matcher.save()
         self.ranker.save()
 
-    def predict(self, sentences: List[Sentence], return_probabilities: bool = True):
+    def predict(self, sentences: List[Sentence], return_probabilities: bool = True, label_name: str = None):
+        if not label_name:
+            label_name = "label_predicted_proba" if return_probabilities else "label_predicted"
         self.matcher.predict(sentences, return_probabilities=return_probabilities)
         self.ranker.predict(sentences, return_probabilities=return_probabilities)
         if return_probabilities:
-            self.mix_with_probabilities(sentences)
+            self.mix_with_probabilities(sentences, label_name)
         else:
-            self.predict_only_matched_clusters(sentences)
+            self.predict_only_matched_clusters(sentences, label_name)
 
-    def mix_with_probabilities(self, sentences: List[Sentence]):
+    def mix_with_probabilities(self, sentences: List[Sentence], label_name: str):
         logger.info("Joining probabilities")
         for sentence in sentences:
             matcher = sentence.get_labels("matcher_proba")
@@ -117,9 +120,9 @@ class DACModel:
                         score = next(l.score for l in matcher if cluster == get_label_value(l)) * label.score
                     except StopIteration:
                         score = 0.0
-                sentence.add_label("label_predicted_proba", label.value, score)
+                sentence.add_label(label_name, label.value, score)
 
-    def predict_only_matched_clusters(self, sentences: List[Sentence]):
+    def predict_only_matched_clusters(self, sentences: List[Sentence], label_name: str):
         for sentence in sentences:
             matcher_predictions = [get_label_value(label_matcher) for label_matcher in sentence.get_labels("matcher")]
             ranker_predictions = sentence.get_labels("ranker")
@@ -129,9 +132,9 @@ class DACModel:
                 if self.multi_cluster and any(
                     c in matcher_predictions for c in self.mappings[get_label_value(label_ranker)]
                 ):
-                    sentence.add_label("label_predicted", label_ranker.value, 1.0)
+                    sentence.add_label(label_name, label_ranker.value, 1.0)
                 elif self.mappings[get_label_value(label_ranker)] in matcher_predictions:
-                    sentence.add_label("label_predicted", label_ranker.value, 1.0)
+                    sentence.add_label(label_name, label_ranker.value, 1.0)
 
     def eval(
         self,
