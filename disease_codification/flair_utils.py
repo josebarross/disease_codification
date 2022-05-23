@@ -1,3 +1,4 @@
+import os
 import shutil
 from pathlib import Path
 from typing import List
@@ -8,8 +9,8 @@ from flair.embeddings import TransformerDocumentEmbeddings
 from flair.models import TextClassifier
 from flair.trainers import ModelTrainer
 from disease_codification.custom_io import create_dir_if_dont_exist
+from disease_codification.dataset import Augmentation
 from disease_codification.gcp import download_blob_file
-from disease_codification.process_dataset.mapper import Augmentation, mapper_process_function
 from disease_codification import logger
 
 
@@ -37,10 +38,11 @@ def read_augmentation_corpora(
 ):
     corpora = []
     for aug in augmentation:
-        if not mapper_process_function[indexer].get(aug):
+        path_aug = indexers_path / indexer / f"{caller}-{aug}"
+        if not os.listdir(path_aug):
             logger.info(f"Augmentation {aug} not implemented")
             continue
-        aug = read_corpus(indexers_path / indexer / f"{caller}-{aug}", filename, only_train=True)
+        aug = read_corpus(path_aug, filename, only_train=True)
         if aug:
             corpora.append(aug)
     return corpora

@@ -10,7 +10,7 @@ from disease_codification.custom_io import create_dir_if_dont_exist, load_mappin
 from disease_codification.flair_utils import read_augmentation_corpora, read_corpus
 from disease_codification.gcp import download_blob_file, upload_blob_file
 from disease_codification.metrics import Metrics
-from disease_codification.process_dataset.mapper import Augmentation
+from disease_codification.dataset import Augmentation
 from disease_codification.utils import chunks, label_in_cluster
 from flair.data import MultiCorpus, Sentence
 from flair.embeddings import TransformerDocumentEmbeddings

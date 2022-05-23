@@ -14,7 +14,7 @@ from disease_codification.flair_utils import (
 )
 from disease_codification.gcp import download_blob_file, upload_blob_file
 from disease_codification.metrics import Metrics, calculate_mean_average_precision, calculate_summary
-from disease_codification.process_dataset.mapper import Augmentation
+from disease_codification.dataset import Augmentation
 from flair.data import Sentence
 from flair.models import TextClassifier
 from flair import set_seed

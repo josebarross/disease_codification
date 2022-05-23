@@ -1,0 +1,338 @@
+import itertools
+import json
+from abc import ABC, abstractmethod
+from enum import Enum
+from functools import partial
+from pathlib import Path
+import re
+from typing import Dict, List, Union
+
+import numpy as np
+import pandas as pd
+from disease_codification import logger
+from disease_codification.corpora_downloader import create_directories
+from disease_codification.custom_io import create_dir_if_dont_exist, save_as_pickle, write_fasttext_file
+from disease_codification.evaluation import eval_ensemble, eval_mean
+from disease_codification.model.dac import DACModel
+
+
+class Augmentation(Enum):
+    ner_sentence = "ner_sentence"
+    ner_stripped = "ner_stripped"
+    ner_mention = "ner_mention"
+    descriptions_labels = "descriptions_labels"
+
+
+class DACCorpus(ABC):
+    def __init__(
+        self,
+        corpus: str,
+        data_path: Path,
+        augmentation_matcher: List[Augmentation] = [Augmentation.descriptions_labels, Augmentation.ner_sentence],
+        augmentation_ranker: List[Augmentation] = [
+            Augmentation.descriptions_labels,
+            Augmentation.ner_sentence,
+            Augmentation.ner_stripped,
+            Augmentation.ner_mention,
+        ],
+        augmentation_corpus: List[Augmentation] = [
+            Augmentation.descriptions_labels,
+            Augmentation.ner_sentence,
+            Augmentation.ner_stripped,
+            Augmentation.ner_mention,
+        ],
+        first_n_digits_f1: int = 0,
+    ):
+        self.corpus = corpus
+        self.corpuses_path, self.indexers_path, self.models_path = create_directories(data_path)
+        self.indexer_path = self.indexers_path / corpus
+        self.augmentation_matcher = augmentation_matcher
+        self.augmentation_ranker = augmentation_ranker
+        self.augmentation_corpus = augmentation_corpus
+        self.first_n_digits_f1 = first_n_digits_f1
+        self.__create_paths__()
+
+    def __create_paths__(self):
+        create_dir_if_dont_exist(self.indexer_path)
+        create_dir_if_dont_exist(self.indexer_path / "corpus")
+        create_dir_if_dont_exist(self.indexer_path / "matcher")
+        create_dir_if_dont_exist(self.indexer_path / "ranker")
+        for aug in self.augmentation_matcher:
+            create_dir_if_dont_exist(self.indexer_path / f"matcher-{aug}")
+        for aug in self.augmentation_ranker:
+            create_dir_if_dont_exist(self.indexer_path / f"ranker-{aug}")
+        for aug in self.augmentation_corpus:
+            create_dir_if_dont_exist(self.indexer_path / f"corpus-{aug}")
+
+    def create_corpuses(self):
+        logger.info("Creating corpuses for use by models")
+        self.df_sentences = self.process_corpus()
+        self.labels = set(itertools.chain.from_iterable([ls for ls in self.df_sentences["labels"].to_list()]))
+        self.mappings_label_to_cluster = self.clusterize()
+        self.cluster_counts = self._get_cluster_counts_()
+        self.clusters = set(itertools.chain.from_iterable(self.mappings_label_to_cluster.values()))
+
+        save_as_pickle(self.mappings_label_to_cluster, self.indexer_path / "mappings.pickle")
+        self.__create_corpus__()
+        self.__create_matcher_corpus__()
+        self.__create_ranker_corpus__()
+        self.__create_augmentation_corpora__()
+        self.log_info_of_labels()
+
+    @abstractmethod
+    def process_corpus(self) -> pd.DataFrame:
+        pass
+
+    @abstractmethod
+    def assign_clusters_to_label(self, label: str) -> List[str]:
+        pass
+
+    def download_corpus(self):
+        return
+
+    def process_augmentation_ne_mentions(self) -> pd.DataFrame:
+        return pd.DataFrame()
+
+    def process_augmentation_descriptions(self) -> pd.DataFrame:
+        return pd.DataFrame()
+
+    def clusterize(self) -> Dict[str, List[str]]:
+
+        return {label: self._assign_clusters_to_label_(label) for label in self.labels}
+
+    def _assign_clusters_to_label_(self, label: str) -> List[str]:
+        clusters_assigned = self.assign_clusters_to_label(label)
+        assert type(clusters_assigned) == list
+        return clusters_assigned
+
+    def __process_augmentation_ne_mentions__(self) -> pd.DataFrame:
+        df = self.process_augmentation_ne_mentions()
+        if df.empty:
+            return pd.DataFrame()
+        df["labels"] = df["label"].apply(lambda x: [x])
+        df = df.drop_duplicates(subset=["mention_text", "label"])
+        df["sentence"] = df["mention_text"]
+        return df[["sentence", "labels"]]
+
+    def process_augmentation_ne_sentences(self) -> pd.DataFrame:
+        sentences_df = pd.DataFrame()
+        documents_df = self.process_corpus()
+        ne_mentions_df = self.process_augmentation_ne_mentions()
+        if ne_mentions_df.empty:
+            return pd.DataFrame()
+        sentences = []
+        labels = []
+        disgregated = 0
+        for _, row_documents in documents_df.iterrows():
+            if row_documents["split_type"] == "test":
+                continue
+            document_sentences = [s for s in re.split("\.|\n", row_documents["sentence"])]
+            document_labels = ne_mentions_df[ne_mentions_df["filename"] == row_documents["filename"]]
+            end_char = 0
+            for sentence in document_sentences:
+                start_char = end_char
+                end_char += len(sentence) + 1
+                labels_sentence = []
+                for _, row_label in document_labels.iterrows():
+                    if start_char <= int(row_label["off0"]) and end_char >= int(row_label["off1"]):
+                        try:
+                            mention_text_words = row_label["mention_text"].replace(".", "").replace(",", "").split(" ")
+                            assert all(
+                                word in sentence.replace(".", "").replace(",", "") for word in mention_text_words
+                            )
+                            labels_sentence.append(row_label["label"])
+                        except AssertionError:
+                            logger.info(f"Label searching: {row_label['mention_text']}")
+                            logger.info(f"{start_char}-{end_char}: {sentence}")
+                            logger.warning("Possible error in ne_mention processing function")
+                            disgregated += 1
+                if sentence:
+                    sentences.append(sentence.strip())
+                    labels.append(labels_sentence)
+        if disgregated:
+            logger.warn(f"{disgregated} labels are in more than one sentence so werent added")
+        sentences_df["sentence"] = sentences
+        sentences_df["labels"] = labels
+        return sentences_df
+
+    def process_augmentation_ne_stripped(self) -> pd.DataFrame:
+        ne_mentions_df = self.process_augmentation_ne_mentions()
+        if ne_mentions_df.empty:
+            return pd.DataFrame()
+        group = ne_mentions_df.groupby("filename")
+        labels = group["label"].apply(set)
+        sentences = group["mention_text"].apply(list).apply(" ".join)
+        df = labels.to_frame("label").join(sentences.to_frame("mention_text"))
+        df["sentence"] = df["mention_text"]
+        df["labels"] = df["label"]
+        df = df[["sentence", "labels"]].reset_index(drop=True)
+        return df
+
+    def __process_augmentation_descriptions__(self):
+        df = self.process_augmentation_descriptions()
+        if df.empty:
+            return df
+        for label in self.labels:
+            if label not in df["label"].values:
+                df.loc[len(df.index)] = [label, "Sin descripcion"]
+        df = df[df["label"].isin(self.labels)]
+        df = df[df["description"] != "Sin descripcion"]
+        df = df.dropna(subset=["description"])
+        df = df.drop_duplicates(["description", "label"])
+        df["labels"] = df["label"].apply(lambda x: [x])
+        df["sentence"] = df["description"]
+        return df[["sentence", "labels"]].reset_index(drop=True)
+
+    def _get_cluster_counts_(self):
+        clusters = np.array(list(itertools.chain.from_iterable(self.mappings_label_to_cluster.values())))
+        unique, counts = np.unique(clusters, return_counts=True)
+        return dict(zip(unique, [int(c) for c in counts]))
+
+    def __create_corpus__(self):
+        for split_type in ["train", "test", "dev"]:
+            df_split_type = self.df_sentences[self.df_sentences["split_type"] == split_type]
+            sentences = df_split_type["sentence"].tolist()
+            labels = [ls for ls in df_split_type["labels"].to_list()]
+            write_fasttext_file(sentences, labels, self.indexer_path / "corpus" / f"corpus_{split_type}.txt")
+
+    def __create_matcher_corpus__(self):
+        for split_type in ["train", "test", "dev"]:
+            df_split_type = self.df_sentences[self.df_sentences["split_type"] == split_type]
+            sentences = df_split_type["sentence"].tolist()
+            labels = [self.__labels_to_clusters__(ls) for ls in df_split_type["labels"].to_list()]
+            write_fasttext_file(sentences, labels, self.indexer_path / "matcher" / f"matcher_{split_type}.txt")
+
+    def __create_ranker_corpus__(self):
+        self.df_sentences["clusters"] = [
+            self.__labels_to_clusters__(ls) for ls in self.df_sentences["labels"].to_list()
+        ]
+        for cluster in self.clusters:
+            is_in_cluster = self.df_sentences["clusters"].apply(partial(self.__is_in_cluster__, cluster))
+            df_cluster = self.df_sentences[is_in_cluster]
+            for split_type in ["train", "test", "dev"]:
+                df_split_type = df_cluster[df_cluster["split_type"] == split_type]
+                sentences = df_split_type["sentence"].tolist()
+                labels = []
+                for ls in df_split_type["labels"].to_list():
+                    ls_parsed = [l for l in ls if cluster in self.mappings_label_to_cluster[l]]
+                    labels.append(ls_parsed)
+                if len(sentences) > 50000 and self.cluster_counts[cluster] > 200:
+                    print(cluster)
+                write_fasttext_file(
+                    sentences, labels, self.indexer_path / "ranker" / f"ranker_{cluster}_{split_type}.txt"
+                )
+
+    def __labels_to_clusters__(self, ls):
+        return set(itertools.chain.from_iterable(self.mappings_label_to_cluster[l] for l in ls))
+
+    def __is_in_cluster__(self, cluster, clusters):
+        return cluster in clusters
+
+    def __is_in_labels__(self, label, ls):
+        return label in ls
+
+    def log_info_of_labels(self):
+        logger.info(f"Amount of clusters: {len(self.clusters)}")
+        logger.info(f"Amount of labels: {len(self.mappings_label_to_cluster)}")
+        counts = [c for c in self.cluster_counts.values()]
+        logger.info(f"Amount of labels multi-cluster: {sum(counts)}")
+        logger.info(json.dumps(self.cluster_counts, indent=2))
+        logger.info(f"Mean: {np.mean(counts)}")
+        logger.info(f"Std: {np.std(counts)}")
+
+    def __create_augmentation_corpora__(self):
+        logger.info("Matcher")
+        augs_map = {
+            Augmentation.ner_mention: self.__process_augmentation_ne_mentions__,
+            Augmentation.descriptions_labels: self.__process_augmentation_descriptions__,
+            Augmentation.ner_sentence: self.process_augmentation_ne_sentences,
+            Augmentation.ner_stripped: self.process_augmentation_ne_stripped,
+        }
+        for aug in self.augmentation_matcher:
+            logger.info(aug)
+            df = augs_map[aug]()
+            if df.empty:
+                logger.info(f"{aug} not implemented")
+                continue
+            sentences = df["sentence"].to_list()
+            labels = [self.__labels_to_clusters__(ls) for ls in df["labels"].to_list()]
+            write_fasttext_file(
+                sentences,
+                labels,
+                self.indexer_path / f"matcher-{aug}" / f"matcher_train.txt",
+            )
+        logger.info("Ranker")
+        for aug in self.augmentation_ranker:
+            logger.info(aug)
+            df = augs_map[aug]()
+            if df.empty:
+                logger.info(f"{aug} not implemented")
+                continue
+            for cluster in self.clusters:
+                cluster_sentences = [
+                    sentence
+                    for sentence, ls in zip(df["sentence"].to_list(), df["labels"].to_list())
+                    if self.__is_in_cluster__(cluster, self.__labels_to_clusters__(ls))
+                ]
+                cluster_labels = [
+                    [l for l in ls if self.__is_in_cluster__(cluster, self.__labels_to_clusters__([l]))]
+                    for ls in df["labels"].to_list()
+                    if self.__is_in_cluster__(cluster, self.__labels_to_clusters__(ls))
+                ]
+                write_fasttext_file(
+                    cluster_sentences,
+                    cluster_labels,
+                    self.indexer_path / f"ranker-{aug}" / f"{cluster}_train.txt",
+                )
+        logger.info("Corpus")
+        for aug in self.augmentation_corpus:
+            logger.info(aug)
+            df = augs_map[aug]()
+            if df.empty:
+                logger.info(f"{aug} not implemented")
+                continue
+            write_fasttext_file(
+                df["sentence"].to_list(),
+                df["labels"].to_list(),
+                self.indexer_path / f"corpus-{aug}" / f"corpus_train.txt",
+            )
+
+    def reproduce_mean_models(self):
+        corpus = self.corpus
+        self.download_corpus()
+        transformers = ["PlanTL-GOB-ES/roberta-base-biomedical-clinical-es"] * 5
+        seeds = range(5)
+        self._train_models_(transformers, seeds)
+        eval_mean(
+            self.indexers_path,
+            self.models_path,
+            corpus,
+            transformers=transformers,
+            seeds=seeds,
+            first_n_digits=self.first_n_digits_f1,
+        )
+
+    def reproduce_ensemble_models(self):
+        corpus = self.corpus
+        self.download_corpus()
+        transformers = (
+            5 * ["PlanTL-GOB-ES/roberta-base-biomedical-clinical-es"]
+            + 5 * ["PlanTL-GOB-ES/roberta-base-biomedical-es"]
+            + 5 * ["dccuchile/bert-base-spanish-wwm-cased"]
+        )
+        seeds = range(15)
+        self._train_models_(transformers, seeds)
+        eval_ensemble(
+            self.indexers_path,
+            self.models_path,
+            corpus,
+            transformers=transformers,
+            seeds=seeds,
+            first_n_digits=self.first_n_digits_f1,
+        )
+
+    def _train_models_(self, transformers: List[str], seeds: List[int]):
+        corpus = self.corpus
+        for transformer, i in zip(transformers, seeds):
+            model = DACModel(self.indexers_path, self.models_path, corpus, seed=i, matcher_transformer=transformer)
+            model.train()
