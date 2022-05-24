@@ -8,9 +8,9 @@ from typing import List
 
 import pandas as pd
 
-from disease_codification.custom_io import load_pickle, save_as_pickle
-from disease_codification import logger
-from disease_codification.dataset.base import DACCorpus
+from dac_divide_and_conquer.custom_io import load_pickle, save_as_pickle
+from dac_divide_and_conquer import logger
+from dac_divide_and_conquer.dataset.base import DACCorpus
 
 
 class FALPCorpus(DACCorpus):

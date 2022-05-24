@@ -5,8 +5,8 @@ from typing import List
 import numpy as np
 from sklearn.metrics import average_precision_score, classification_report, f1_score
 
-from disease_codification.flair_utils import get_label_value
-from disease_codification import logger
+from dac_divide_and_conquer.flair_utils import get_label_value
+from dac_divide_and_conquer import logger
 
 
 class Metrics(Enum):

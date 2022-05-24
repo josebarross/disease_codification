@@ -1,9 +1,9 @@
 from pathlib import Path
 from typing import List
 
-from disease_codification.custom_io import create_dir_if_dont_exist, load_mappings, load_pickle, save_as_pickle
-from disease_codification.flair_utils import read_corpus
-from disease_codification.gcp import download_blob_file, upload_blob_file
+from dac_divide_and_conquer.custom_io import create_dir_if_dont_exist, load_mappings, load_pickle, save_as_pickle
+from dac_divide_and_conquer.flair_utils import read_corpus
+from dac_divide_and_conquer.gcp import download_blob_file, upload_blob_file
 from flair.data import Sentence, MultiCorpus
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.multiclass import OneVsRestClassifier
@@ -11,8 +11,8 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import MultiLabelBinarizer
 from xgboost import XGBClassifier
 
-from disease_codification.metrics import calculate_mean_average_precision
-from disease_codification import logger
+from dac_divide_and_conquer.metrics import calculate_mean_average_precision
+from dac_divide_and_conquer import logger
 
 
 class OVA:

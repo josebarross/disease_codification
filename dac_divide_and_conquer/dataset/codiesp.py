@@ -6,9 +6,9 @@ from typing import Dict, List, Union
 
 import pandas as pd
 
-from disease_codification.dataset.base import DACCorpus
-from disease_codification import logger
-from disease_codification import corpora_downloader as cd
+from dac_divide_and_conquer.dataset.base import DACCorpus
+from dac_divide_and_conquer import logger
+from dac_divide_and_conquer import corpora_downloader as cd
 
 
 class CodiespSubtask(Enum):

@@ -7,9 +7,9 @@ from xml.etree.ElementTree import ElementTree
 
 import pandas as pd
 from lxml import etree
-from disease_codification.corpora_downloader import download_corpus
-from disease_codification.dataset.base import DACCorpus
-from disease_codification import logger
+from dac_divide_and_conquer.corpora_downloader import download_corpus
+from dac_divide_and_conquer.dataset.base import DACCorpus
+from dac_divide_and_conquer import logger
 
 
 class MesinespSubtask(enum.Enum):

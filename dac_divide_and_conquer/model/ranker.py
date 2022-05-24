@@ -5,13 +5,13 @@ from pathlib import Path
 from typing import Dict, List, Union
 
 import numpy as np
-from disease_codification import logger
-from disease_codification.custom_io import create_dir_if_dont_exist, load_mappings, load_pickle, save_as_pickle
-from disease_codification.flair_utils import read_augmentation_corpora, read_corpus
-from disease_codification.gcp import download_blob_file, upload_blob_file
-from disease_codification.metrics import Metrics
-from disease_codification.dataset import Augmentation
-from disease_codification.utils import chunks, label_in_cluster
+from dac_divide_and_conquer import logger
+from dac_divide_and_conquer.custom_io import create_dir_if_dont_exist, load_mappings, load_pickle, save_as_pickle
+from dac_divide_and_conquer.flair_utils import read_augmentation_corpora, read_corpus
+from dac_divide_and_conquer.gcp import download_blob_file, upload_blob_file
+from dac_divide_and_conquer.metrics import Metrics
+from dac_divide_and_conquer.dataset import Augmentation
+from dac_divide_and_conquer.utils import chunks, label_in_cluster
 from flair.data import MultiCorpus, Sentence
 from flair.embeddings import TransformerDocumentEmbeddings
 from sklearn.feature_extraction.text import TfidfVectorizer

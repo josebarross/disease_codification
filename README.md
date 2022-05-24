@@ -1,30 +1,37 @@
-# disease-codfication
+# dac-divide-and-conquer
 
-This repository holds the code to reproduce and train an Information Retrieval model for ICD 10 Code Text Classification
+We have implemented a library for extreme multi-label classification that leverages semantic relationship between labels. This library has been extensively tested in disease coding in Spanish and has improved state-of-the-art performance in Codiesp procedures and Codiesp Diagnostics. All the defaults are in the library code.
 
-To install this as a library you should create a virtual enviroment and install the library with this command:
+To use this library run the following command (We recommend creating a Virtual Enviroment in your project first)
 
 ```
-pip install git+https://your-github-personal-token@github.com/plncmm/disease_codification.git
+pip install git+https://github.com/plncmm/dac-divide-and-conquer.git
 ```
 
-To reproduce results you should run the following code changing the path to one you can use for storing intermediate steps of the process:
+To reproduce any of the results you should run the following code changing the path to one you can use for storing intermediate steps of the process:
 
 ```
 from pathlib import Path
-from disease_codification.reproducibility.codiesp import reproduce_model_codiesp
-reproduce_model_codiesp(Path(".").resolve())
+from dac_divide_and_conquer.dataset import CodiespCorpus, CantemistCorpus, MESINESPCorpus
+
+data_path = Path("..").resolve() / "data"
+
+corpus = CodiespCorpus(data_path, CodiespSubtask.diagnostics)
+corpus.reproduce_mean_models()
+corpus.reproduce_ensemble_models()
 ```
 
-If you want to save the models you need a .env with the following variables for saving them in a google cloud storage.
+You can reproduce the results for the following corpuses: CodiespCorpus-diagnostics, CodiespCorpus-procedures, CantemistCorpus, MESINESPCorpus-abstracts, MESINESPCorpus-clinical_trials.
+
+This code is open and almost self explanatory so please check the code and the arguments. Any doubt can be addressed on the Issues.
+
+If you want to save the models in Google Cloud Storage you need a .env with the following variables
 
 ```
 GOOGLE_APPLICATION_CREDENTIALS =
 PROJECT_ID =
 BUCKET =
 ```
-
-All the defaults are in the library code.
 
 List of transformers that have been used:
 

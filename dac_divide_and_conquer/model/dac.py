@@ -1,14 +1,14 @@
 from pathlib import Path
 from typing import List
 
-from disease_codification.custom_io import load_mappings
-from disease_codification.flair_utils import get_label_value, read_corpus
-from disease_codification.metrics import Metrics, calculate_mean_average_precision, calculate_summary
-from disease_codification.model.matcher import Matcher
+from dac_divide_and_conquer.custom_io import load_mappings
+from dac_divide_and_conquer.flair_utils import get_label_value, read_corpus
+from dac_divide_and_conquer.metrics import Metrics, calculate_mean_average_precision, calculate_summary
+from dac_divide_and_conquer.model.matcher import Matcher
 
-from disease_codification.model.ranker import Ranker
+from dac_divide_and_conquer.model.ranker import Ranker
 from flair.data import Sentence
-from disease_codification import logger
+from dac_divide_and_conquer import logger
 
 
 class DACModel:

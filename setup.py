@@ -8,16 +8,16 @@ with open("requirements.txt") as f:
 
 
 setuptools.setup(
-    name="disease-codification",
-    version="0.14.2",
+    name="dac-divide-and-conquer",
+    version="1.0.0",
     author="Jose Barros",
     author_email="jose.barros.s@ug.uchile.cl",
-    description="Implements a model for disease codificacion using a Extreme Classification Model",
+    description="Implements an architecture for extreme multi-label classification leveraging semantic relations between labels. Extensively tested for disease coding.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/josebarross/disease-codification",
+    url="https://github.com/josebarross/dac-divide-and-conquer",
     project_urls={
-        "Bug Tracker": "https://github.com/josebarross/disease-codification/issues",
+        "Bug Tracker": "https://github.com/josebarross/dac-divide-and-conquer/issues",
     },
     classifiers=["Programming Language :: Python :: 3", "Operating System :: OS Independent"],
     packages=setuptools.find_packages(),

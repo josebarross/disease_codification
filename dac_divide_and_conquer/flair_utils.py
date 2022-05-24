@@ -8,10 +8,10 @@ from flair.datasets import ClassificationCorpus
 from flair.embeddings import TransformerDocumentEmbeddings
 from flair.models import TextClassifier
 from flair.trainers import ModelTrainer
-from disease_codification.custom_io import create_dir_if_dont_exist
-from disease_codification.dataset import Augmentation
-from disease_codification.gcp import download_blob_file
-from disease_codification import logger
+from dac_divide_and_conquer.custom_io import create_dir_if_dont_exist
+from dac_divide_and_conquer.dataset import Augmentation
+from dac_divide_and_conquer.gcp import download_blob_file
+from dac_divide_and_conquer import logger
 
 
 def read_corpus(data_folder: Path, filename: str, only_train: bool = False):

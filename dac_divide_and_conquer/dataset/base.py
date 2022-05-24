@@ -9,11 +9,11 @@ from typing import Dict, List, Union
 
 import numpy as np
 import pandas as pd
-from disease_codification import logger
-from disease_codification.corpora_downloader import create_directories
-from disease_codification.custom_io import create_dir_if_dont_exist, save_as_pickle, write_fasttext_file
-from disease_codification.evaluation import eval_ensemble, eval_mean
-from disease_codification.model.dac import DACModel
+from dac_divide_and_conquer import logger
+from dac_divide_and_conquer.corpora_downloader import create_directories
+from dac_divide_and_conquer.custom_io import create_dir_if_dont_exist, save_as_pickle, write_fasttext_file
+from dac_divide_and_conquer.evaluation import eval_ensemble, eval_mean
+from dac_divide_and_conquer.model.dac import DACModel
 
 
 class Augmentation(Enum):
@@ -300,6 +300,7 @@ class DACCorpus(ABC):
     def reproduce_mean_models(self):
         corpus = self.corpus
         self.download_corpus()
+        self.create_corpuses()
         transformers = ["PlanTL-GOB-ES/roberta-base-biomedical-clinical-es"] * 5
         seeds = range(5)
         self._train_models_(transformers, seeds)
@@ -315,6 +316,7 @@ class DACCorpus(ABC):
     def reproduce_ensemble_models(self):
         corpus = self.corpus
         self.download_corpus()
+        self.create_corpuses()
         transformers = (
             5 * ["PlanTL-GOB-ES/roberta-base-biomedical-clinical-es"]
             + 5 * ["PlanTL-GOB-ES/roberta-base-biomedical-es"]

@@ -3,18 +3,18 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Union
 
-from disease_codification import logger
-from disease_codification.custom_io import create_dir_if_dont_exist, load_mappings, write_fasttext_file
-from disease_codification.flair_utils import (
+from dac_divide_and_conquer import logger
+from dac_divide_and_conquer.custom_io import create_dir_if_dont_exist, load_mappings, write_fasttext_file
+from dac_divide_and_conquer.flair_utils import (
     CustomMultiCorpus,
     get_label_value,
     read_augmentation_corpora,
     read_corpus,
     train_transformer_classifier,
 )
-from disease_codification.gcp import download_blob_file, upload_blob_file
-from disease_codification.metrics import Metrics, calculate_mean_average_precision, calculate_summary
-from disease_codification.dataset import Augmentation
+from dac_divide_and_conquer.gcp import download_blob_file, upload_blob_file
+from dac_divide_and_conquer.metrics import Metrics, calculate_mean_average_precision, calculate_summary
+from dac_divide_and_conquer.dataset import Augmentation
 from flair.data import Sentence
 from flair.models import TextClassifier
 from flair import set_seed

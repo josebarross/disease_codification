@@ -5,7 +5,7 @@ import pickle
 from dotenv import load_dotenv
 from google.cloud import storage
 
-from disease_codification import logger
+from dac_divide_and_conquer import logger
 
 load_dotenv()
 

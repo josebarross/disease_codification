@@ -2,11 +2,11 @@ from collections import defaultdict
 import json
 import statistics
 from typing import List
-from disease_codification.flair_utils import get_label_value, read_corpus
-from disease_codification.metrics import Metrics, calculate_mean_average_precision, calculate_summary
+from dac_divide_and_conquer.flair_utils import get_label_value, read_corpus
+from dac_divide_and_conquer.metrics import Metrics, calculate_mean_average_precision, calculate_summary
 
-from disease_codification.model.dac import DACModel
-from disease_codification import logger
+from dac_divide_and_conquer.model.dac import DACModel
+from dac_divide_and_conquer import logger
 
 
 def eval_mean(
