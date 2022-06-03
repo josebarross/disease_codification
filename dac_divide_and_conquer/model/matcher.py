@@ -3,8 +3,10 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Union
 
+import torch
 from dac_divide_and_conquer import logger
 from dac_divide_and_conquer.custom_io import create_dir_if_dont_exist, load_mappings, write_fasttext_file
+from dac_divide_and_conquer.dataset import Augmentation
 from dac_divide_and_conquer.flair_utils import (
     CustomMultiCorpus,
     get_label_value,
@@ -14,10 +16,11 @@ from dac_divide_and_conquer.flair_utils import (
 )
 from dac_divide_and_conquer.gcp import download_blob_file, upload_blob_file
 from dac_divide_and_conquer.metrics import Metrics, calculate_mean_average_precision, calculate_summary
-from dac_divide_and_conquer.dataset import Augmentation
+from flair import set_seed
 from flair.data import Sentence
 from flair.models import TextClassifier
-from flair import set_seed
+from flair.optim import LinearSchedulerWithWarmup
+from torch.optim import SGD, Adam
 
 
 class Matcher:
@@ -84,9 +87,12 @@ class Matcher:
         remove_after_running: bool = False,
         downsample: int = 0.0,
         train_with_dev: bool = True,
-        layers="-1",
+        layers="-1,-2,-3,-4",
         num_workers=2,
         save_model_each_k_epochs: int = 0,
+        optimizer: torch.optim = torch.optim.AdamW,
+        scheduler=LinearSchedulerWithWarmup,
+        **kwargs,
     ):
         logger.info(f"Finetuning for {self.indexer}")
         corpus = read_corpus(self.indexers_path / self.indexer / "matcher", "matcher")
@@ -111,6 +117,9 @@ class Matcher:
             transformer_name=self.transformer,
             num_workers=num_workers,
             save_model_each_k_epochs=save_model_each_k_epochs,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            **kwargs,
         )
         if upload_to_gcp:
             self.upload_to_gcp()

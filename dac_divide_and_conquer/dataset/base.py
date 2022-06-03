@@ -5,22 +5,16 @@ from enum import Enum
 from functools import partial
 from pathlib import Path
 import re
-from typing import Dict, List, Union
+from typing import Dict, List
 
 import numpy as np
 import pandas as pd
 from dac_divide_and_conquer import logger
 from dac_divide_and_conquer.corpora_downloader import create_directories
 from dac_divide_and_conquer.custom_io import create_dir_if_dont_exist, save_as_pickle, write_fasttext_file
+from dac_divide_and_conquer.dataset import Augmentation
 from dac_divide_and_conquer.evaluation import eval_ensemble, eval_mean
 from dac_divide_and_conquer.model.dac import DACModel
-
-
-class Augmentation(Enum):
-    ner_sentence = "ner_sentence"
-    ner_stripped = "ner_stripped"
-    ner_mention = "ner_mention"
-    descriptions_labels = "descriptions_labels"
 
 
 class DACCorpus(ABC):

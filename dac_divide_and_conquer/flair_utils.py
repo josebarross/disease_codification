@@ -3,15 +3,18 @@ import shutil
 from pathlib import Path
 from typing import List
 
-from flair.data import Corpus, ConcatDataset
+import torch
+from flair.data import ConcatDataset, Corpus
 from flair.datasets import ClassificationCorpus
 from flair.embeddings import TransformerDocumentEmbeddings
 from flair.models import TextClassifier
+from flair.optim import LinearSchedulerWithWarmup
 from flair.trainers import ModelTrainer
+
+from dac_divide_and_conquer import logger
 from dac_divide_and_conquer.custom_io import create_dir_if_dont_exist
 from dac_divide_and_conquer.dataset import Augmentation
 from dac_divide_and_conquer.gcp import download_blob_file
-from dac_divide_and_conquer import logger
 
 
 def read_corpus(data_folder: Path, filename: str, only_train: bool = False):
@@ -61,6 +64,9 @@ def train_transformer_classifier(
     transformer_name="PlanTL-GOB-ES/roberta-base-biomedical-es",
     num_workers=2,
     save_model_each_k_epochs: int = 0,
+    optimizer: torch.optim = torch.optim.AdamW,
+    scheduler=LinearSchedulerWithWarmup,
+    **kwargs,
 ):
     create_dir_if_dont_exist(results_path)
     if downsample:
@@ -82,6 +88,9 @@ def train_transformer_classifier(
         train_with_dev=train_with_dev,
         num_workers=num_workers,
         save_model_each_k_epochs=save_model_each_k_epochs,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        **kwargs,
     )
     if remove_after_running:
         shutil.rmtree(results_path)
