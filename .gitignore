@@ -135,4 +135,5 @@ dmypy.json
 # Custom files for executing code
 config.py
 main.py
+utils_for_thesis.py
 *.slurm
