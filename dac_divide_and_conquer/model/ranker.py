@@ -32,6 +32,12 @@ class Ranker:
         cluster_tfidf: Dict[str, TfidfVectorizer] = {},
         seed: int = 0,
     ):
+        """
+        :param indexers_path: path of preprocessing files created by DACCorpus
+        :param models_path: path of where to save the models
+        :param indexer: corpus name given to DACCorpus
+        :param seed: Seed to set for XGBoost
+        """
         self.indexers_path: Path = indexers_path
         self.models_path: Path = models_path
         self.indexer: str = indexer
@@ -169,6 +175,24 @@ class Ranker:
         subsample: float = 0.6,
         colsample_bytree: float = 0.6,
     ):
+        """
+        :param upload_to_gcp: Wether to upload model to Google Cloud Storage after training
+        :param split_types_train: Which splits to use for training
+        :param augmentation: Which Augmentation techniques to use for training
+        :param use_incorrect_matcher_predictions: Use incorrect matcher predictions for training
+        :param subset: Subset of data to train
+        :param transformer_for_embedding: Add transformer contextual embedding to tf-idf embedding, should provide transformer name to use for embedding
+        :param log_statistics_while_train: Output stats of test evaluation during training
+        :param train_starting_from_cluster: From which cluster index to start. Useful for pausing and resuming training.
+        :param train_until_cluster: With which cluster index to end. Useful for pausing and resuming training.
+        :param n_jobs_ova: How many hard forks to create for one vs rest. Usefull for paralellizing the training.
+        :param n_jobs_xgb: How many threads to use in XGBoost train. Default all.
+        :param scale_pos_weight: Wether to use the max or the mean of the cluster as scale_pos_weight
+        :param tree_method: Tree method for XGBoost
+        :param booster: Booster for XGBoost
+        :param sumsample: Row subsample for XGBoost
+        :param colsample_bytre: Column subsample for XGBoost
+        """
         clusters_to_train = (
             self.clusters[train_starting_from_cluster:]
             if not train_until_cluster

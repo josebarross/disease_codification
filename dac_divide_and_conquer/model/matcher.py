@@ -33,7 +33,14 @@ class Matcher:
         seed: int = 0,
         classifier: TextClassifier = None,
     ):
-        # Matcher is trained by the indexers in the order they are provided, the one to predict should be the last provided
+        """
+        :param indexers_path: path of preprocessing files created by DACCorpus
+        :param models_path: path of where to save the models
+        :param indexer: corpus name given to DACCorpus
+        :param transformer: transformer name to use of HuggingFace
+        :param seed: Seed to set for Flair
+        :param classifier: (internal) if one wants to load an already trained TextClassifier it can provide it here
+        """
         self.indexers_path = indexers_path
         self.indexer = indexer
         self.models_path = models_path
@@ -94,6 +101,20 @@ class Matcher:
         scheduler=LinearSchedulerWithWarmup,
         **kwargs,
     ):
+        """
+        :param upload_to_gcp: if True uploads the model to Google Cloud Storage after training
+        :param augmentation: list of Augmentations to use
+        :param max_epochs: Max epochs to use
+        :param remove_after_running: Removes saved model after running, may be useful to save disk space if it was already uploaded
+        :param downsample: downsample of data
+        :param train_with_dev: Whether to use the validation set in training
+        :param layers: Layers to be finetuned
+        :param num_workers: to use loading corpus
+        :param save_model_each_epochs: Epochs to pass between model saves
+        :param optimizer: Optimizer to use for training
+        :param scheduler: Scheduler to use for training
+        :param **kwargs: Other arguments that can be passed to flair trainer
+        """
         logger.info(f"Finetuning for {self.indexer}")
         corpus = read_corpus(self.indexers_path / self.indexer / "matcher", "matcher")
         corpora = [corpus] + read_augmentation_corpora(

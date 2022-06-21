@@ -75,19 +75,43 @@ class DACCorpus(ABC):
 
     @abstractmethod
     def process_corpus(self) -> pd.DataFrame:
+        """
+        :return: A pandas DataFrame with the following columns:
+            sentence: String with the document text
+            labels: List of strings with the document labels
+            split_type: train, test or dev
+            filename: Filename or id of the document
+        """
         pass
 
     @abstractmethod
     def assign_clusters_to_label(self, label: str) -> List[str]:
+        """
+        :param label: Label string
+        :return: A list of the label clusters
+        """
         pass
 
     def download_corpus(self):
         return
 
     def process_augmentation_ne_mentions(self) -> pd.DataFrame:
+        """
+        :return: A pandas DataFrame with the following columns:
+            filename: Filename or id of the document
+            mention_text: Mention string of an entity
+            label: Label of the mentioned entity
+            off0: Start offset of the mention
+            off1: End offset of the mention
+        """
         return pd.DataFrame()
 
     def process_augmentation_descriptions(self) -> pd.DataFrame:
+        """
+        :return: A pandas DataFrame with the following columns:
+            label: Label string
+            description: Text description of label
+        """
         return pd.DataFrame()
 
     def clusterize(self) -> Dict[str, List[str]]:
