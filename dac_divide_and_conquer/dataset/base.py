@@ -315,13 +315,18 @@ class DACCorpus(ABC):
                 self.indexer_path / f"corpus-{aug}" / f"corpus_train.txt",
             )
 
-    def reproduce_mean_models(self):
+    def reproduce_mean_models(
+        self, train_models: bool = True, download_corpus: bool = True, create_corpuses: bool = True
+    ):
         corpus = self.corpus
-        self.download_corpus()
-        self.create_corpuses()
+        if download_corpus:
+            self.download_corpus()
+        if create_corpuses:
+            self.create_corpuses()
         transformers = ["PlanTL-GOB-ES/roberta-base-biomedical-clinical-es"] * 5
         seeds = range(5)
-        self._train_models_(transformers, seeds)
+        if train_models:
+            self._train_models_(transformers, seeds)
         eval_mean(
             self.indexers_path,
             self.models_path,
@@ -331,17 +336,22 @@ class DACCorpus(ABC):
             first_n_digits=self.first_n_digits_f1,
         )
 
-    def reproduce_ensemble_models(self):
+    def reproduce_ensemble_models(
+        self, train_models: bool = True, download_corpus: bool = True, create_corpuses: bool = True
+    ):
         corpus = self.corpus
-        self.download_corpus()
-        self.create_corpuses()
+        if download_corpus:
+            self.download_corpus()
+        if create_corpuses:
+            self.create_corpuses()
         transformers = (
             5 * ["PlanTL-GOB-ES/roberta-base-biomedical-clinical-es"]
             + 5 * ["PlanTL-GOB-ES/roberta-base-biomedical-es"]
             + 5 * ["dccuchile/bert-base-spanish-wwm-cased"]
         )
         seeds = range(15)
-        self._train_models_(transformers, seeds)
+        if train_models:
+            self._train_models_(transformers, seeds)
         eval_ensemble(
             self.indexers_path,
             self.models_path,
