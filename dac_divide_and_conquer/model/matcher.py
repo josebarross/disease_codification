@@ -158,16 +158,19 @@ class Matcher:
         if not sentences:
             return
         logger.info("Evaluation of Matcher")
+        scores = {}
         for metric in eval_metrics:
             labels_list = (
                 itertools.chain.from_iterable(self.mappings.values()) if self.multi_cluster else self.mappings.values()
             )
             if metric == Metrics.map:
                 self.predict(sentences, return_probabilities=True)
-                calculate_mean_average_precision(sentences, labels_list, label_name_predicted="matcher_proba")
+                score = calculate_mean_average_precision(sentences, labels_list, label_name_predicted="matcher_proba")
             elif metric == Metrics.summary:
                 self.predict(sentences, return_probabilities=False)
-                calculate_summary(sentences, labels_list, label_name_predicted="matcher")
+                score = calculate_summary(sentences, labels_list, label_name_predicted="matcher")
+            scores[metric.value] = score
+        return scores
 
     def create_corpus_of_incorrectly_predicted(self):
         corpus = read_corpus(self.indexers_path / self.indexer / "corpus", "corpus")

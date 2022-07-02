@@ -107,3 +107,33 @@ def eval_ensemble(
         results_evaluation[str(metric)] = final_score
 
     logger.info(json.dumps(results_evaluation, indent=2))
+
+
+def component_analysis(
+    indexers_path,
+    models_path,
+    indexer,
+    transformers: List[str],
+    seeds: List[int],
+    load_matcher_from_gcp: bool = False,
+    load_ranker_from_gcp: bool = False,
+    metrics: List[Metrics] = [Metrics.map, Metrics.summary],
+    first_n_digits: int = 0,
+):
+    all_scores = {}
+    for transformer, seed in zip(transformers, seeds):
+        dac = DACModel.load(
+            indexers_path,
+            models_path,
+            indexer,
+            matcher_transformer=transformer,
+            seed=seed,
+            load_ranker_from_gcp=load_ranker_from_gcp,
+            load_matcher_from_gcp=load_matcher_from_gcp,
+        )
+        scores = dac.eval(eval_metrics=metrics, first_n_digits_summary=first_n_digits)
+        all_scores[f"{transformer}-{seed}"] = scores
+    logger.info(all_scores)
+    with open(models_path / dac.indexer / "component_analysis.json", "w") as f:
+        json.dump(all_scores, f)
+    return all_scores

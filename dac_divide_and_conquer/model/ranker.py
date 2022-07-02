@@ -330,6 +330,7 @@ class Ranker:
     def eval_weighted(
         self, split_types: List[str] = ["test"], eval_weighted_metrics: List[Metrics] = [Metrics.map, Metrics.summary]
     ):
+        scores = {}
         for metric in eval_weighted_metrics:
             logger.info(f"Calculating {metric} weighted for {split_types}")
             metric_clusters = {}
@@ -344,6 +345,8 @@ class Ranker:
             logger.info(metric)
             logger.info(metric_clusters)
             logger.info(weighted_metric)
+            scores[metric.value] = weighted_metric
+        return scores
 
     def eval_cluster(self, cluster, metric, split_type):
         sentences = self._read_sentences(cluster, [split_type])

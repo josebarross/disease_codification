@@ -146,21 +146,22 @@ class DACModel:
         if eval_matcher:
             corpus_matcher = read_corpus(self.indexers_path / self.indexer / "matcher", "matcher")
             sentences_matcher = [s for s in corpus_matcher.test]
-            self.matcher.eval(sentences_matcher, eval_metrics=eval_metrics)
+            scores_matcher = self.matcher.eval(sentences_matcher, eval_metrics=eval_metrics)
         if eval_ranker:
-            self.ranker.eval_weighted(eval_weighted_metrics=eval_metrics)
+            scores_ranker = self.ranker.eval_weighted(eval_weighted_metrics=eval_metrics)
 
         corpus = read_corpus(self.indexers_path / self.indexer / "corpus", "corpus")
         sentences = [s for s in corpus.test]
+        scores_dac = {}
         for metric in eval_metrics:
             if metric == Metrics.map:
                 self.predict(sentences)
-                calculate_mean_average_precision(
+                score = calculate_mean_average_precision(
                     sentences, self.mappings.keys(), label_name_predicted="label_predicted_proba"
                 )
             elif metric == Metrics.summary:
                 self.predict(sentences, return_probabilities=False)
-                calculate_summary(
+                score = calculate_summary(
                     sentences,
                     self.mappings.keys(),
                     label_name_predicted="label_predicted",
@@ -170,3 +171,7 @@ class DACModel:
                 calculate_mean_average_precision(
                     sentences, self.mappings.keys(), label_name_predicted="label_predicted"
                 )
+            scores_dac[metric.value] = score
+        scores = {"scores_matcher": scores_matcher, "scores_ranker": scores_ranker, "scores_dac": scores_dac}
+        logger.info(scores)
+        return scores
