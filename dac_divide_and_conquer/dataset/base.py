@@ -5,6 +5,7 @@ from enum import Enum
 from functools import partial
 from pathlib import Path
 import re
+import statistics
 from typing import Dict, List
 
 import numpy as np
@@ -72,6 +73,7 @@ class DACCorpus(ABC):
         self.__create_ranker_corpus__()
         self.__create_augmentation_corpora__()
         self.log_info_of_labels()
+        self._create_corpus_stats_file()
 
     @abstractmethod
     def process_corpus(self) -> pd.DataFrame:
@@ -366,3 +368,21 @@ class DACCorpus(ABC):
         for transformer, i in zip(transformers, seeds):
             model = DACModel(self.indexers_path, self.models_path, corpus, seed=i, matcher_transformer=transformer)
             model.train()
+
+    def _create_corpus_stats_file(self):
+        stats_corpus = {}
+        for split_type in ["train", "test", "dev"]:
+            stats_split = {}
+            df_split_type = self.df_sentences[self.df_sentences["split_type"] == split_type]
+            stats_split["documents"] = df_split_type.shape[0]
+            stats_split["avg_document_len"] = statistics.mean([len(sentence) for sentence in df_split_type["sentence"]])
+            stats_split["avg_labels_per_document"] = statistics.mean(
+                [len(labels) for labels in df_split_type["labels"]]
+            )
+            stats_split["avg_clusters_per_document"] = statistics.mean(
+                [len(self.__labels_to_clusters__(ls)) for ls in df_split_type["labels"].to_list()]
+            )
+            stats_corpus[split_type] = stats_split
+        logger.info(stats_corpus)
+        with open(self.indexer_path / "stats.json", "w") as f:
+            json.dump(stats_corpus, f)

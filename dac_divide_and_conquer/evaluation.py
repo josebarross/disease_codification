@@ -23,6 +23,8 @@ def eval_mean(
     assert len(transformers) == len(seeds)
     maps = []
     f1_scores = []
+    precisions = []
+    recalls = []
     corpus = read_corpus(indexers_path / indexer / "corpus", "corpus")
     sentences = [s for s in corpus.test]
     for transformer, seed in zip(transformers, seeds):
@@ -45,12 +47,18 @@ def eval_mean(
                 logger.info(f"MAP {dac.name}: {map_s}")
                 maps.append(map_s)
             elif metric == Metrics.summary:
-                f1 = calculate_summary(sentences, dac.mappings.keys(), first_n_digits=first_n_digits, output_full=False)
-                logger.info(f"F1 {dac.name}: {f1}")
-                f1_scores.append(f1)
+                f1_score, precision, recall = calculate_summary(
+                    sentences, dac.mappings.keys(), first_n_digits=first_n_digits, output_full=False
+                )
+                logger.info(f"F1 {dac.name}: {f1_score}")
+                f1_scores.append(f1_score)
+                precisions.append(precision)
+                recalls.append(recall)
 
     logger.info(f"MAPS: {maps}, mean: {statistics.mean(maps)}, sd: {statistics.stdev(maps)}")
     logger.info(f"F1s: {f1_scores}, mean: {statistics.mean(f1_scores)}, sd: {statistics.stdev(f1_scores)}")
+    logger.info(f"Precision: {precisions}, mean: {statistics.mean(precisions)}, sd: {statistics.stdev(precisions)}")
+    logger.info(f"Recall: {recalls}, mean: {statistics.mean(recalls)}, sd: {statistics.stdev(recalls)}")
 
 
 def eval_ensemble(
@@ -96,15 +104,16 @@ def eval_ensemble(
                     sentence.add_label(label_name, label, score)
                 elif metric == Metrics.summary:
                     sentence.add_label(label_name, label, 1.0)
-
-        final_score = (
-            calculate_mean_average_precision(sentences, dac.mappings.keys(), label_name)
-            if metric == Metrics.map
-            else calculate_summary(
+        if metric == Metrics.map:
+            score = calculate_mean_average_precision(sentences, dac.mappings.keys(), label_name)
+            results_evaluation[str(metric)] = score
+        elif metric == Metrics.summary:
+            f1_score, precision, recall = calculate_summary(
                 sentences, dac.mappings.keys(), label_name, first_n_digits=first_n_digits, output_full=False
             )
-        )
-        results_evaluation[str(metric)] = final_score
+            results_evaluation[str(metric)] = f1_score
+            results_evaluation["precision"] = precision
+            results_evaluation["recall"] = recall
 
     logger.info(json.dumps(results_evaluation, indent=2))
 

@@ -3,6 +3,7 @@ import multiprocessing
 import statistics
 from pathlib import Path
 from typing import Dict, List, Union
+from more_itertools import first
 
 import numpy as np
 from dac_divide_and_conquer import logger
@@ -15,7 +16,7 @@ from dac_divide_and_conquer.utils import chunks, label_in_cluster
 from flair.data import MultiCorpus, Sentence
 from flair.embeddings import TransformerDocumentEmbeddings
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics import average_precision_score, f1_score
+from sklearn.metrics import average_precision_score, f1_score, precision_score, recall_score
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.preprocessing import MultiLabelBinarizer
 from xgboost import XGBClassifier
@@ -328,27 +329,42 @@ class Ranker:
                             sentence.add_label("ranker", classes[i], 1.0)
 
     def eval_weighted(
-        self, split_types: List[str] = ["test"], eval_weighted_metrics: List[Metrics] = [Metrics.map, Metrics.summary]
+        self, eval_weighted_metrics: List[Metrics] = [Metrics.map, Metrics.summary], first_n_digits: int = 0
     ):
         scores = {}
         for metric in eval_weighted_metrics:
-            logger.info(f"Calculating {metric} weighted for {split_types}")
+            logger.info(f"Calculating {metric} weighted for test")
             metric_clusters = {}
-            for split_type in split_types:
-                for cluster in self.clusters:
-                    result, weight = self.eval_cluster(cluster, metric, split_type)
-                    if result:
-                        metric_clusters[cluster] = (result, weight)
+            for cluster in self.clusters:
+                result, weight = self.eval_cluster(cluster, metric, "test", first_n_digits=first_n_digits)
+                if result and metric == Metrics.map:
+                    metric_clusters[cluster] = (result, weight)
+                elif result and metric == Metrics.summary:
+                    metric_clusters[cluster] = {
+                        Metrics.summary.value: (result[0], weight),
+                        "precision": (result[1], weight),
+                        "recall": (result[2], weight),
+                    }
+            if metric == Metrics.map:
                 weighted_metric = sum(map_stat * d_points for map_stat, d_points in metric_clusters.values()) / sum(
                     d_points for _, d_points in metric_clusters.values()
                 )
+                scores[metric.value] = weighted_metric
+            elif metric == Metrics.summary:
+                for i in ["precision", "recall", Metrics.summary.value]:
+                    weighted_metric = sum(
+                        map_stat * d_points
+                        for map_stat, d_points in [cluster_metrics[i] for cluster_metrics in metric_clusters.values()]
+                    ) / sum(
+                        d_points for _, d_points in [cluster_metrics[i] for cluster_metrics in metric_clusters.values()]
+                    )
+                    scores[i] = weighted_metric
             logger.info(metric)
             logger.info(metric_clusters)
             logger.info(weighted_metric)
-            scores[metric.value] = weighted_metric
         return scores
 
-    def eval_cluster(self, cluster, metric, split_type):
+    def eval_cluster(self, cluster, metric, split_type, first_n_digits: int = 0):
         sentences = self._read_sentences(cluster, [split_type])
         if not sentences:
             return 0, 0
@@ -371,7 +387,24 @@ class Ranker:
             else:
                 embeddings = self._get_embeddings(cluster, sentences)
                 predictions = self.cluster_classifier[cluster].predict(embeddings)
-            return f1_score(labels_matrix, predictions, average="micro"), len(sentences)
+            if first_n_digits:
+                label_binarizer: MultiLabelBinarizer = self.cluster_label_binarizer[cluster]
+                gold_n_digits = [
+                    {g.strip("<>")[:first_n_digits] for g in gold}
+                    for gold in label_binarizer.inverse_transform(labels_matrix)
+                ]
+                predictions_n_digits = [
+                    {p.strip("<>")[:first_n_digits] for p in pred}
+                    for pred in label_binarizer.inverse_transform(predictions)
+                ]
+                new_mlb = MultiLabelBinarizer()
+                new_mlb.fit([{x.strip("<>")[:first_n_digits]} for x in label_binarizer.classes_])
+                labels_matrix, predictions = new_mlb.transform(gold_n_digits), new_mlb.transform(predictions_n_digits)
+            return (
+                f1_score(labels_matrix, predictions, average="micro"),
+                precision_score(labels_matrix, predictions, average="micro"),
+                recall_score(labels_matrix, predictions, average="micro"),
+            ), len(sentences)
 
     def save(self):
         logger.info("Saving model")

@@ -1,6 +1,8 @@
 from pathlib import Path
 from typing import List
 
+from sklearn.metrics import f1_score
+
 from dac_divide_and_conquer.custom_io import load_mappings
 from dac_divide_and_conquer.flair_utils import get_label_value, read_corpus
 from dac_divide_and_conquer.metrics import Metrics, calculate_mean_average_precision, calculate_summary
@@ -143,12 +145,15 @@ class DACModel:
         eval_ranker: bool = True,
         eval_matcher: bool = True,
     ):
+        scores_matcher, scores_ranker = 0.0, 0.0
         if eval_matcher:
             corpus_matcher = read_corpus(self.indexers_path / self.indexer / "matcher", "matcher")
             sentences_matcher = [s for s in corpus_matcher.test]
             scores_matcher = self.matcher.eval(sentences_matcher, eval_metrics=eval_metrics)
         if eval_ranker:
-            scores_ranker = self.ranker.eval_weighted(eval_weighted_metrics=eval_metrics)
+            scores_ranker = self.ranker.eval_weighted(
+                eval_weighted_metrics=eval_metrics, first_n_digits=first_n_digits_summary
+            )
 
         corpus = read_corpus(self.indexers_path / self.indexer / "corpus", "corpus")
         sentences = [s for s in corpus.test]
@@ -159,9 +164,10 @@ class DACModel:
                 score = calculate_mean_average_precision(
                     sentences, self.mappings.keys(), label_name_predicted="label_predicted_proba"
                 )
+                scores_dac[metric.value] = score
             elif metric == Metrics.summary:
                 self.predict(sentences, return_probabilities=False)
-                score = calculate_summary(
+                f1_score, precision, recall = calculate_summary(
                     sentences,
                     self.mappings.keys(),
                     label_name_predicted="label_predicted",
@@ -171,7 +177,9 @@ class DACModel:
                 calculate_mean_average_precision(
                     sentences, self.mappings.keys(), label_name_predicted="label_predicted"
                 )
-            scores_dac[metric.value] = score
+                scores_dac[metric.value] = f1_score
+                scores_dac["precision"] = precision
+                scores_dac["recall"] = recall
         scores = {"scores_matcher": scores_matcher, "scores_ranker": scores_ranker, "scores_dac": scores_dac}
         logger.info(scores)
         return scores

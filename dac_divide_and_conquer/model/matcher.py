@@ -166,10 +166,13 @@ class Matcher:
             if metric == Metrics.map:
                 self.predict(sentences, return_probabilities=True)
                 score = calculate_mean_average_precision(sentences, labels_list, label_name_predicted="matcher_proba")
+                scores[metric.value] = score
             elif metric == Metrics.summary:
                 self.predict(sentences, return_probabilities=False)
-                score = calculate_summary(sentences, labels_list, label_name_predicted="matcher")
-            scores[metric.value] = score
+                f1_score, precision, recall = calculate_summary(sentences, labels_list, label_name_predicted="matcher")
+                scores[metric.value] = f1_score
+                scores["precision"] = precision
+                scores["recall"] = recall
         return scores
 
     def create_corpus_of_incorrectly_predicted(self):
