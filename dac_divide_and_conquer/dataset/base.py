@@ -156,7 +156,9 @@ class DACCorpus(ABC):
                 for _, row_label in document_labels.iterrows():
                     if start_char <= int(row_label["off0"]) and end_char >= int(row_label["off1"]):
                         try:
-                            mention_text_words = row_label["mention_text"].replace(".", "").replace(",", "").split(" ")
+                            mention_text_words = (
+                                row_label["mention_text"].replace(".", "").replace(",", "").replace("\n", "").split(" ")
+                            )
                             assert all(
                                 word in sentence.replace(".", "").replace(",", "") for word in mention_text_words
                             )
