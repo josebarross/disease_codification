@@ -8,7 +8,7 @@ from more_itertools import first
 import numpy as np
 from dac_divide_and_conquer import logger
 from dac_divide_and_conquer.custom_io import create_dir_if_dont_exist, load_mappings, load_pickle, save_as_pickle
-from dac_divide_and_conquer.flair_utils import read_augmentation_corpora, read_corpus
+from dac_divide_and_conquer.flair_utils import read_augmentation_corpora, read_corpus, save_predictions_to_file
 from dac_divide_and_conquer.gcp import download_blob_file, upload_blob_file
 from dac_divide_and_conquer.metrics import Metrics
 from dac_divide_and_conquer.dataset import Augmentation
@@ -305,6 +305,7 @@ class Ranker:
 
     def predict(self, sentences: List[Sentence], return_probabilities=True):
         logger.info("Predicting ranker")
+        label_name = "ranker_proba" if return_probabilities else "ranker"
         for cluster in self.clusters:
             logger.info(cluster)
             classes = self.cluster_label_binarizer[cluster].classes_
@@ -327,6 +328,9 @@ class Ranker:
                     for i, pred in enumerate(prediction):
                         if pred:
                             sentence.add_label("ranker", classes[i], 1.0)
+        save_predictions_to_file(
+            self.models_path / "predictions_ranker", f"{self.name}.json", sentences, label_name, return_probabilities
+        )
 
     def eval_weighted(
         self, eval_weighted_metrics: List[Metrics] = [Metrics.map, Metrics.summary], first_n_digits: int = 0

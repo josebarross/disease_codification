@@ -1,10 +1,11 @@
+import json
 import os
 import shutil
 from pathlib import Path
 from typing import List
 
 import torch
-from flair.data import ConcatDataset, Corpus
+from flair.data import ConcatDataset, Corpus, Sentence
 from flair.datasets import ClassificationCorpus
 from flair.embeddings import TransformerDocumentEmbeddings
 from flair.models import TextClassifier
@@ -138,3 +139,21 @@ class CustomMultiCorpus(Corpus):
         )
         output += "\n - ".join([f"{type(corpus).__name__} {str(corpus)} - {corpus.name}" for corpus in self.corpora])
         return output
+
+
+def save_predictions_to_file(
+    path: Path, filename: str, sentences: List[Sentence], label_name: str, return_probabilities: bool
+):
+    create_dir_if_dont_exist(path)
+    path_predictions = path / filename
+    predictions = json.load(path_predictions) if path_predictions.exists() else {}
+    for i, sentence in enumerate(sentences):
+        predictions[i]["gold"] = [get_label_value(l) for l in sentence.get_labels("gold")]
+        if return_probabilities:
+            predictions[i]["predicted_probabilities"] = {
+                get_label_value(l): l.score for l in sentence.get_labels(label_name)
+            }
+        else:
+            predictions[i]["predicted"] = [get_label_value(l) for l in sentence.get_labels(label_name)]
+    with open(path_predictions, "w") as f:
+        json.dump(predictions, f)

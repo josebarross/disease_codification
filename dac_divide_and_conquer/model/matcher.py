@@ -12,6 +12,7 @@ from dac_divide_and_conquer.flair_utils import (
     get_label_value,
     read_augmentation_corpora,
     read_corpus,
+    save_predictions_to_file,
     train_transformer_classifier,
 )
 from dac_divide_and_conquer.gcp import download_blob_file, upload_blob_file
@@ -152,6 +153,9 @@ class Matcher:
         label_name = "matcher_proba" if return_probabilities else "matcher"
         self.classifier.predict(
             sentences, label_name=label_name, return_probabilities_for_all_classes=return_probabilities
+        )
+        save_predictions_to_file(
+            self.models_path / "predictions_matcher", f"{self.name}.json", sentences, label_name, return_probabilities
         )
 
     def eval(self, sentences, eval_metrics: List[Metrics] = [Metrics.map, Metrics.summary]):

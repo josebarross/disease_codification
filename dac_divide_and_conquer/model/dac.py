@@ -4,7 +4,7 @@ from typing import List
 from sklearn.metrics import f1_score
 
 from dac_divide_and_conquer.custom_io import load_mappings
-from dac_divide_and_conquer.flair_utils import get_label_value, read_corpus
+from dac_divide_and_conquer.flair_utils import get_label_value, read_corpus, save_predictions_to_file
 from dac_divide_and_conquer.metrics import Metrics, calculate_mean_average_precision, calculate_summary
 from dac_divide_and_conquer.model.matcher import Matcher
 
@@ -97,6 +97,9 @@ class DACModel:
             self.mix_with_probabilities(sentences, label_name)
         else:
             self.predict_only_matched_clusters(sentences, label_name)
+        save_predictions_to_file(
+            self.models_path / "predictions_dac", f"{self.name}.json", sentences, label_name, return_probabilities
+        )
 
     def mix_with_probabilities(self, sentences: List[Sentence], label_name: str):
         logger.info("Joining probabilities")
