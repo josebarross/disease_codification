@@ -7,6 +7,7 @@ import torch
 from dac_divide_and_conquer import logger
 from dac_divide_and_conquer.custom_io import create_dir_if_dont_exist, load_mappings, write_fasttext_file
 from dac_divide_and_conquer.dataset import Augmentation
+from dac_divide_and_conquer.dataset.base import DACCorpus
 from dac_divide_and_conquer.flair_utils import (
     CustomMultiCorpus,
     get_label_value,
@@ -27,9 +28,7 @@ from torch.optim import SGD, Adam
 class Matcher:
     def __init__(
         self,
-        indexers_path: Path,
-        models_path: Path,
-        indexer: str,
+        corpus: DACCorpus,
         transformer: str = "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es",
         seed: int = 0,
         classifier: TextClassifier = None,
@@ -42,15 +41,16 @@ class Matcher:
         :param seed: Seed to set for Flair
         :param classifier: (internal) if one wants to load an already trained TextClassifier it can provide it here
         """
-        self.indexers_path = indexers_path
-        self.indexer = indexer
-        self.models_path = models_path
+        self.corpus = corpus
+        self.indexers_path = corpus.indexers_path
+        self.indexer = corpus.corpus
+        self.models_path = corpus.models_path
         self.transformer = transformer
         self.seed = seed
         self.name = f"{transformer}-{seed}"
         self.classifier = classifier
-        self.mappings, self.clusters, self.multi_cluster = load_mappings(indexers_path, indexer)
-        Matcher.create_directories(models_path, indexer, self.transformer, self.seed)
+        self.mappings, self.clusters, self.multi_cluster = load_mappings(self.indexers_path, self.indexer)
+        Matcher.create_directories(self.models_path, self.indexer, self.transformer, self.seed)
 
     @classmethod
     def create_directories(cls, models_path: Path, indexer: Path, transformer: str, seed: int):
@@ -61,20 +61,18 @@ class Matcher:
     @classmethod
     def load(
         cls,
-        indexers_path: Path,
-        models_path: Path,
-        indexer: str,
+        corpus: DACCorpus,
         transformer: str = "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es",
         seed: int = 0,
         load_from_gcp: bool = False,
     ):
-        cls.create_directories(models_path, indexer, transformer, seed)
+        cls.create_directories(corpus.models_path, corpus.corpus, transformer, seed)
         name = f"{transformer}-{seed}"
-        filename = f"{indexer}/matcher/{name}/final-model.pt"
+        filename = f"{corpus.corpus}/matcher/{name}/final-model.pt"
         if load_from_gcp:
-            download_blob_file(filename, models_path / filename)
-        classifier = TextClassifier.load(models_path / filename)
-        return cls(indexers_path, models_path, indexer, transformer=transformer, classifier=classifier, seed=seed)
+            download_blob_file(filename, corpus.models_path / filename)
+        classifier = TextClassifier.load(corpus.models_path / filename)
+        return cls(corpus, transformer=transformer, classifier=classifier, seed=seed)
 
     def save(self):
         self.classifier.save(self.models_path / self.indexer / "matcher" / self.name / "final-model.pt")
@@ -155,7 +153,12 @@ class Matcher:
             sentences, label_name=label_name, return_probabilities_for_all_classes=return_probabilities
         )
         save_predictions_to_file(
-            self.models_path / "predictions_matcher", f"{self.name}.json", sentences, label_name, return_probabilities
+            self.models_path / self.indexer / "predictions_matcher",
+            f"{self.name}.json",
+            sentences,
+            label_name,
+            return_probabilities,
+            self.corpus.filenames["test"],
         )
 
     def eval(self, sentences, eval_metrics: List[Metrics] = [Metrics.map, Metrics.summary]):

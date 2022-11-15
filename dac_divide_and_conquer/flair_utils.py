@@ -142,18 +142,30 @@ class CustomMultiCorpus(Corpus):
 
 
 def save_predictions_to_file(
-    path: Path, filename: str, sentences: List[Sentence], label_name: str, return_probabilities: bool
+    path: Path,
+    filename: str,
+    sentences: List[Sentence],
+    label_name: str,
+    return_probabilities: bool,
+    filenames: List[str],
 ):
-    create_dir_if_dont_exist(path)
     path_predictions = path / filename
-    predictions = json.load(path_predictions) if path_predictions.exists() else {}
-    for i, sentence in enumerate(sentences):
-        predictions[i]["gold"] = [get_label_value(l) for l in sentence.get_labels("gold")]
+    create_dir_if_dont_exist(path_predictions.parent)
+    if path_predictions.exists():
+        with open(path_predictions) as f:
+            predictions = json.load(f)
+    else:
+        predictions = {
+            filename: {"gold": [], "predicted_probabilities": {}, "predicted": [], "text": ""} for filename in filenames
+        }
+    for filename, sentence in zip(filenames, sentences):
+        predictions[filename]["gold"] = [get_label_value(l) for l in sentence.get_labels("gold")]
+        predictions[filename]["text"] = sentence.to_original_text()
         if return_probabilities:
-            predictions[i]["predicted_probabilities"] = {
+            predictions[filename]["predicted_probabilities"] = {
                 get_label_value(l): l.score for l in sentence.get_labels(label_name)
             }
         else:
-            predictions[i]["predicted"] = [get_label_value(l) for l in sentence.get_labels(label_name)]
+            predictions[filename]["predicted"] = [get_label_value(l) for l in sentence.get_labels(label_name)]
     with open(path_predictions, "w") as f:
         json.dump(predictions, f)

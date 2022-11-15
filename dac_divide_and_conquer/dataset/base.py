@@ -14,8 +14,11 @@ from dac_divide_and_conquer import logger
 from dac_divide_and_conquer.corpora_downloader import create_directories
 from dac_divide_and_conquer.custom_io import create_dir_if_dont_exist, save_as_pickle, write_fasttext_file
 from dac_divide_and_conquer.dataset import Augmentation
-from dac_divide_and_conquer.evaluation import eval_ensemble, eval_mean
-from dac_divide_and_conquer.model.dac import DACModel
+
+
+def read_json(path: Path):
+    with open(path) as f:
+        return json.load(f)
 
 
 class DACCorpus(ABC):
@@ -45,6 +48,8 @@ class DACCorpus(ABC):
         self.augmentation_ranker = augmentation_ranker
         self.augmentation_corpus = augmentation_corpus
         self.first_n_digits_f1 = first_n_digits_f1
+        path_filenames = self.indexer_path / "filenames.json"
+        self.filenames = {} if not path_filenames.exists() else read_json(path_filenames)
         self.__create_paths__()
 
     def __create_paths__(self):
@@ -66,8 +71,10 @@ class DACCorpus(ABC):
         self.mappings_label_to_cluster = self.clusterize()
         self.cluster_counts = self._get_cluster_counts_()
         self.clusters = set(itertools.chain.from_iterable(self.mappings_label_to_cluster.values()))
-
+        self.__store_filenames__()
         save_as_pickle(self.mappings_label_to_cluster, self.indexer_path / "mappings.pickle")
+        with open(self.indexer_path / "filenames.json", "w") as f:
+            json.dump(self.filenames, f)
         self.__create_corpus__()
         self.__create_matcher_corpus__()
         self.__create_ranker_corpus__()
@@ -189,6 +196,11 @@ class DACCorpus(ABC):
         df["labels"] = df["label"]
         df = df[["sentence", "labels"]].reset_index(drop=True)
         return df
+
+    def __store_filenames__(self):
+        for split_type in ["train", "test", "dev"]:
+            df_split_type = self.df_sentences[self.df_sentences["split_type"] == split_type]
+            self.filenames[split_type] = [l for l in df_split_type["filename"].to_list()]
 
     def __process_augmentation_descriptions__(self):
         df = self.process_augmentation_descriptions()
@@ -318,58 +330,6 @@ class DACCorpus(ABC):
                 df["labels"].to_list(),
                 self.indexer_path / f"corpus-{aug}" / f"corpus_train.txt",
             )
-
-    def reproduce_mean_models(
-        self, train_models: bool = True, download_corpus: bool = True, create_corpuses: bool = True
-    ):
-        corpus = self.corpus
-        if download_corpus:
-            self.download_corpus()
-        if create_corpuses:
-            self.create_corpuses()
-        transformers = ["PlanTL-GOB-ES/roberta-base-biomedical-clinical-es"] * 5
-        seeds = range(5)
-        if train_models:
-            self._train_models_(transformers, seeds)
-        eval_mean(
-            self.indexers_path,
-            self.models_path,
-            corpus,
-            transformers=transformers,
-            seeds=seeds,
-            first_n_digits=self.first_n_digits_f1,
-        )
-
-    def reproduce_ensemble_models(
-        self, train_models: bool = True, download_corpus: bool = True, create_corpuses: bool = True
-    ):
-        corpus = self.corpus
-        if download_corpus:
-            self.download_corpus()
-        if create_corpuses:
-            self.create_corpuses()
-        transformers = (
-            5 * ["PlanTL-GOB-ES/roberta-base-biomedical-clinical-es"]
-            + 5 * ["PlanTL-GOB-ES/roberta-base-biomedical-es"]
-            + 5 * ["dccuchile/bert-base-spanish-wwm-cased"]
-        )
-        seeds = range(15)
-        if train_models:
-            self._train_models_(transformers, seeds)
-        eval_ensemble(
-            self.indexers_path,
-            self.models_path,
-            corpus,
-            transformers=transformers,
-            seeds=seeds,
-            first_n_digits=self.first_n_digits_f1,
-        )
-
-    def _train_models_(self, transformers: List[str], seeds: List[int]):
-        corpus = self.corpus
-        for transformer, i in zip(transformers, seeds):
-            model = DACModel(self.indexers_path, self.models_path, corpus, seed=i, matcher_transformer=transformer)
-            model.train()
 
     def _create_corpus_stats_file(self):
         stats_corpus = {}

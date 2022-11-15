@@ -8,6 +8,7 @@ from more_itertools import first
 import numpy as np
 from dac_divide_and_conquer import logger
 from dac_divide_and_conquer.custom_io import create_dir_if_dont_exist, load_mappings, load_pickle, save_as_pickle
+from dac_divide_and_conquer.dataset.base import DACCorpus
 from dac_divide_and_conquer.flair_utils import read_augmentation_corpora, read_corpus, save_predictions_to_file
 from dac_divide_and_conquer.gcp import download_blob_file, upload_blob_file
 from dac_divide_and_conquer.metrics import Metrics
@@ -25,9 +26,7 @@ from xgboost import XGBClassifier
 class Ranker:
     def __init__(
         self,
-        indexers_path: Path,
-        models_path: Path,
-        indexer: str,
+        corpus: DACCorpus,
         cluster_classifier={},
         cluster_label_binarizer={},
         cluster_tfidf: Dict[str, TfidfVectorizer] = {},
@@ -39,9 +38,10 @@ class Ranker:
         :param indexer: corpus name given to DACCorpus
         :param seed: Seed to set for XGBoost
         """
-        self.indexers_path: Path = indexers_path
-        self.models_path: Path = models_path
-        self.indexer: str = indexer
+        self.corpus = corpus
+        self.indexers_path: Path = corpus.indexers_path
+        self.models_path: Path = corpus.models_path
+        self.indexer: str = corpus.corpus
         self.cluster_classifier: Dict[str, OneVsRestClassifier] = cluster_classifier
         self.cluster_label_binarizer: Dict[str, MultiLabelBinarizer] = cluster_label_binarizer
         self.cluster_tfidf = cluster_tfidf
@@ -49,7 +49,7 @@ class Ranker:
         self.seed = seed
         self.dir_name = f"ranker-{seed}"
         self.transformer_for_embedding = None
-        Ranker.create_directories(models_path, indexer, seed)
+        Ranker.create_directories(self.models_path, self.indexer, seed)
 
     @classmethod
     def create_directories(cls, models_path: Path, indexer: str, seed: int):
@@ -57,7 +57,10 @@ class Ranker:
         create_dir_if_dont_exist(models_path / indexer / f"ranker-{seed}")
 
     @classmethod
-    def load(cls, indexers_path: Path, models_path: Path, indexer: str, load_from_gcp: bool = False, seed: int = 0):
+    def load(cls, corpus: DACCorpus, load_from_gcp: bool = False, seed: int = 0):
+        models_path = corpus.models_path
+        indexer = corpus.corpus
+        indexers_path = corpus.indexers_path
         cls.create_directories(models_path, indexer, seed)
         _, clusters, _ = load_mappings(indexers_path, indexer)
         cluster_classifier = {}
@@ -80,9 +83,7 @@ class Ranker:
                 cluster_classifier[cluster] = None
                 cluster_tfidf[cluster] = None
         return cls(
-            indexers_path,
-            models_path,
-            indexer,
+            corpus,
             cluster_classifier=cluster_classifier,
             cluster_label_binarizer=cluster_label_binarizer,
             cluster_tfidf=cluster_tfidf,
@@ -329,7 +330,12 @@ class Ranker:
                         if pred:
                             sentence.add_label("ranker", classes[i], 1.0)
         save_predictions_to_file(
-            self.models_path / "predictions_ranker", f"{self.name}.json", sentences, label_name, return_probabilities
+            self.models_path / self.indexer / "predictions_ranker",
+            f"{self.dir_name}.json",
+            sentences,
+            label_name,
+            return_probabilities,
+            self.corpus.filenames["test"],
         )
 
     def eval_weighted(

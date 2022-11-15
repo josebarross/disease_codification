@@ -4,6 +4,7 @@ from typing import List
 from sklearn.metrics import f1_score
 
 from dac_divide_and_conquer.custom_io import load_mappings
+from dac_divide_and_conquer.dataset.base import DACCorpus
 from dac_divide_and_conquer.flair_utils import get_label_value, read_corpus, save_predictions_to_file
 from dac_divide_and_conquer.metrics import Metrics, calculate_mean_average_precision, calculate_summary
 from dac_divide_and_conquer.model.matcher import Matcher
@@ -16,53 +17,33 @@ from dac_divide_and_conquer import logger
 class DACModel:
     def __init__(
         self,
-        indexers_path: Path,
-        models_path: Path,
-        indexer: str,
+        corpus: DACCorpus,
         matcher_transformer: str = "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es",
         seed: int = 0,
         ranker: Ranker = None,
         matcher: Matcher = None,
     ):
-        self.indexers_path = indexers_path
-        self.models_path = models_path
-        self.indexer = indexer
-        self.ranker = ranker or Ranker(indexers_path, models_path, indexer)
-        self.matcher = matcher or Matcher(
-            indexers_path, models_path, indexer, transformer=matcher_transformer, seed=seed
-        )
+        self.corpus = corpus
+        self.indexers_path = corpus.indexers_path
+        self.models_path = corpus.models_path
+        self.indexer = corpus.corpus
+        self.ranker = ranker or Ranker(corpus)
+        self.matcher = matcher or Matcher(corpus, transformer=matcher_transformer, seed=seed)
         self.name = f"{matcher_transformer}-{seed}"
-        self.mappings, self.clusters, self.multi_cluster = load_mappings(indexers_path, indexer)
+        self.mappings, self.clusters, self.multi_cluster = load_mappings(self.indexers_path, self.indexer)
 
     @classmethod
     def load(
         cls,
-        indexers_path: Path,
-        models_path: Path,
-        indexer: str,
+        corpus: DACCorpus,
         matcher_transformer: str = "PlanTL-GOB-ES/roberta-base-biomedical-clinical-es",
         seed: int = 0,
         load_ranker_from_gcp: bool = False,
         load_matcher_from_gcp: bool = False,
     ):
-        ranker = Ranker.load(indexers_path, models_path, indexer, load_from_gcp=load_ranker_from_gcp, seed=seed)
-        matcher = Matcher.load(
-            indexers_path,
-            models_path,
-            indexer,
-            transformer=matcher_transformer,
-            seed=seed,
-            load_from_gcp=load_matcher_from_gcp,
-        )
-        return cls(
-            indexers_path,
-            models_path,
-            indexer,
-            ranker=ranker,
-            matcher=matcher,
-            matcher_transformer=matcher_transformer,
-            seed=seed,
-        )
+        ranker = Ranker.load(corpus, load_from_gcp=load_ranker_from_gcp, seed=seed)
+        matcher = Matcher.load(corpus, transformer=matcher_transformer, seed=seed, load_from_gcp=load_matcher_from_gcp)
+        return cls(corpus, ranker=ranker, matcher=matcher, matcher_transformer=matcher_transformer, seed=seed)
 
     def train(
         self,
@@ -98,7 +79,12 @@ class DACModel:
         else:
             self.predict_only_matched_clusters(sentences, label_name)
         save_predictions_to_file(
-            self.models_path / "predictions_dac", f"{self.name}.json", sentences, label_name, return_probabilities
+            self.models_path / self.indexer / "predictions_dac",
+            f"{self.name}.json",
+            sentences,
+            label_name,
+            return_probabilities,
+            self.corpus.filenames["test"],
         )
 
     def mix_with_probabilities(self, sentences: List[Sentence], label_name: str):

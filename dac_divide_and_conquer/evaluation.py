@@ -2,6 +2,7 @@ from collections import defaultdict
 import json
 import statistics
 from typing import List
+from dac_divide_and_conquer.dataset.base import DACCorpus
 from dac_divide_and_conquer.flair_utils import get_label_value, read_corpus
 from dac_divide_and_conquer.metrics import Metrics, calculate_mean_average_precision, calculate_summary
 
@@ -119,9 +120,7 @@ def eval_ensemble(
 
 
 def component_analysis(
-    indexers_path,
-    models_path,
-    indexer,
+    corpus: DACCorpus,
     transformers: List[str],
     seeds: List[int],
     load_matcher_from_gcp: bool = False,
@@ -132,9 +131,7 @@ def component_analysis(
     all_scores = {}
     for transformer, seed in zip(transformers, seeds):
         dac = DACModel.load(
-            indexers_path,
-            models_path,
-            indexer,
+            corpus,
             matcher_transformer=transformer,
             seed=seed,
             load_ranker_from_gcp=load_ranker_from_gcp,
@@ -143,6 +140,6 @@ def component_analysis(
         scores = dac.eval(eval_metrics=metrics, first_n_digits_summary=first_n_digits)
         all_scores[f"{transformer}-{seed}"] = scores
     logger.info(all_scores)
-    with open(models_path / dac.indexer / "component_analysis.json", "w") as f:
+    with open(dac.models_path / dac.indexer / "component_analysis.json", "w") as f:
         json.dump(all_scores, f)
     return all_scores
