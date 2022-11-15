@@ -9,7 +9,7 @@ with open("requirements.txt") as f:
 
 setuptools.setup(
     name="dac-divide-and-conquer",
-    version="1.2.1",
+    version="1.3.1",
     author="Jose Barros",
     author_email="jose.barros.s@ug.uchile.cl",
     description="Implements an architecture for extreme multi-label classification leveraging semantic relations between labels. Extensively tested for disease coding.",
