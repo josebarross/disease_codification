@@ -69,7 +69,9 @@ class DACModel:
         self.matcher.save()
         self.ranker.save()
 
-    def predict(self, sentences: List[Sentence], return_probabilities: bool = True, label_name: str = None):
+    def predict(
+        self, sentences: List[Sentence], return_probabilities: bool = True, label_name: str = None, filenames=None
+    ):
         if not label_name:
             label_name = "label_predicted_proba" if return_probabilities else "label_predicted"
         self.matcher.predict(sentences, return_probabilities=return_probabilities)
@@ -78,13 +80,15 @@ class DACModel:
             self.mix_with_probabilities(sentences, label_name)
         else:
             self.predict_only_matched_clusters(sentences, label_name)
+        if not filenames:
+            filenames = self.corpus.filenames["test"]
         save_predictions_to_file(
             self.models_path / self.indexer / "predictions_dac",
             f"{self.name}.json",
             sentences,
             label_name,
             return_probabilities,
-            self.corpus.filenames["test"],
+            filenames,
         )
 
     def mix_with_probabilities(self, sentences: List[Sentence], label_name: str):
