@@ -155,10 +155,10 @@ def save_predictions_to_file(
         with open(path_predictions) as f:
             predictions = json.load(f)
     else:
-        predictions = {
-            filename: {"gold": [], "predicted_probabilities": {}, "predicted": [], "text": ""} for filename in filenames
-        }
+        predictions = {}
     for filename, sentence in zip(filenames, sentences):
+        if filename not in predictions:
+            predictions[filename] = {"gold": [], "predicted_probabilities": {}, "predicted": [], "text": ""}
         predictions[filename]["gold"] = [get_label_value(l) for l in sentence.get_labels("gold")]
         predictions[filename]["text"] = sentence.to_original_text()
         if return_probabilities:
