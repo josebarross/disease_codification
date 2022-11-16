@@ -74,14 +74,16 @@ class DACModel:
     ):
         if not label_name:
             label_name = "label_predicted_proba" if return_probabilities else "label_predicted"
-        self.matcher.predict(sentences, return_probabilities=return_probabilities)
-        self.ranker.predict(sentences, return_probabilities=return_probabilities)
+
+        if not filenames:
+            filenames = self.corpus.filenames["test"]
+
+        self.matcher.predict(sentences, return_probabilities=return_probabilities, filenames=filenames)
+        self.ranker.predict(sentences, return_probabilities=return_probabilities, filenames=filenames)
         if return_probabilities:
             self.mix_with_probabilities(sentences, label_name)
         else:
             self.predict_only_matched_clusters(sentences, label_name)
-        if not filenames:
-            filenames = self.corpus.filenames["test"]
         save_predictions_to_file(
             self.models_path / self.indexer / "predictions_dac",
             f"{self.name}.json",

@@ -146,19 +146,23 @@ class Matcher:
         self.eval([s for s in corpus.dev])
         self.eval([s for s in corpus.test])
 
-    def predict(self, sentences: List[Sentence], return_probabilities=True):
+    def predict(self, sentences: List[Sentence], return_probabilities=True, filenames: List[str] = []):
         logger.info("Predicting matcher")
         label_name = "matcher_proba" if return_probabilities else "matcher"
         self.classifier.predict(
             sentences, label_name=label_name, return_probabilities_for_all_classes=return_probabilities
         )
+
+        if not filenames:
+            filenames = self.corpus.filenames["test"]
+
         save_predictions_to_file(
             self.models_path / self.indexer / "predictions_matcher",
             f"{self.name}.json",
             sentences,
             label_name,
             return_probabilities,
-            self.corpus.filenames["test"],
+            filenames,
         )
 
     def eval(self, sentences, eval_metrics: List[Metrics] = [Metrics.map, Metrics.summary]):

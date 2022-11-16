@@ -304,7 +304,7 @@ class Ranker:
         if upload_to_gcp:
             self.upload_cluster_to_gcp(cluster)
 
-    def predict(self, sentences: List[Sentence], return_probabilities=True):
+    def predict(self, sentences: List[Sentence], return_probabilities=True, filenames: List[str] = []):
         logger.info("Predicting ranker")
         label_name = "ranker_proba" if return_probabilities else "ranker"
         for cluster in self.clusters:
@@ -329,13 +329,17 @@ class Ranker:
                     for i, pred in enumerate(prediction):
                         if pred:
                             sentence.add_label("ranker", classes[i], 1.0)
+
+        if not filenames:
+            filenames = self.corpus.filenames["test"]
+
         save_predictions_to_file(
             self.models_path / self.indexer / "predictions_ranker",
             f"{self.dir_name}.json",
             sentences,
             label_name,
             return_probabilities,
-            self.corpus.filenames["test"],
+            filenames,
         )
 
     def eval_weighted(
