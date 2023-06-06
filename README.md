@@ -12,16 +12,32 @@ To reproduce any of the results you should run the following code changing the p
 
 ```
 from pathlib import Path
-from dac_divide_and_conquer.dataset import CodiespCorpus, CantemistCorpus, MESINESPCorpus
+from dac_divide_and_conquer.dataset import CodiespCorpus, CantemistCorpus
+from dac_divide_and_conquer.evaluation import eval_mean, eval_ensemble
 
 data_path = Path("..").resolve() / "data"
 
 corpus = CodiespCorpus(data_path, CodiespSubtask.diagnostics)
-corpus.reproduce_mean_models()
-corpus.reproduce_ensemble_models()
+corpus.download_corpus() # Only works if the method is implemented, else manually download
+corpus.create_corpuses() # Preprocess the data to be able to train the model
+
+transformers = (
+    ["PlanTL-GOB-ES/roberta-base-biomedical-clinical-es"] * 5
+    + ["PlanTL-GOB-ES/roberta-base-biomedical-es"] * 5
+    + ["dccuchile/bert-base-spanish-wwm-cased"] * 5
+) # List of already tried transformers, 5 each
+seeds = list(range(15))
+for transformer, seed in zip(transformers, seeds):
+    model = DACModel(corpus, matcher_transformer=transformer, seed=seed)
+    model.train() # Trains the Ranker and Matcher
+    model.save() # Saves the model
+    model.eval() # Evals the models and the Ranker and Matcher
+
+eval_mean(corpus, transformers, seeds) # Loads the models and evaluate the mean of them
+eval_ensemble(corpus, transformers, seeds) # Loads the models evaluate the ensemble of all
 ```
 
-You can reproduce the results for the following corpuses: CodiespCorpus-diagnostics, CodiespCorpus-procedures, CantemistCorpus, MESINESPCorpus-abstracts, MESINESPCorpus-clinical_trials.
+You can reproduce the results for the following corpuses: CodiespCorpus-diagnostics, CodiespCorpus-procedures, CantemistCorpus, MESINESPCorpus-abstracts, MESINESPCorpus-clinical_trials. The FALP corpus is a private corpus so please request the data. The same with the Waiting List Corpus. The Clinical Trials corpus is public but its download method is not implemented.
 
 This code is open and almost self explanatory so please check the code and the arguments. Any doubt can be addressed on the Issues.
 
