@@ -41,6 +41,24 @@ You can reproduce the results for the following corpuses: CodiespCorpus-diagnost
 
 This code is open and almost self explanatory so please check the code and the arguments. Any doubt can be addressed on the Issues.
 
+# Use existing models (already trained and saved) to predict new data
+
+```
+from pathlib import Path
+from dac_divide_and_conquer.dataset import CodiespCorpus
+from flair.data import Sentence
+
+data_path = Path("..").resolve() / "data"
+
+corpus = CodiespCorpus(data_path, CodiespSubtask.diagnostics)
+model = DACModel.load(corpus, transformer, seed)
+sentences = [Sentence("Hola esto quiero predecir"), Sentence("Hola esto tambien")]
+model.predict(sentences, return_probabilities=False)
+for sentence in sentences:
+    predicted = sentence.get_labels("labels_predicted")
+    print(f"{sentence} -> {predicted}")
+```
+
 If you want to save the models in Google Cloud Storage you need a .env with the following variables
 
 ```
