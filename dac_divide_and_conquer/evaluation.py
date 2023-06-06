@@ -11,9 +11,7 @@ from dac_divide_and_conquer import logger
 
 
 def eval_mean(
-    indexers_path,
-    models_path,
-    indexer,
+    corpus: DACCorpus,
     transformers: List[str],
     seeds: List[int],
     load_matcher_from_gcp: bool = False,
@@ -26,13 +24,11 @@ def eval_mean(
     f1_scores = []
     precisions = []
     recalls = []
-    corpus = read_corpus(indexers_path / indexer / "corpus", "corpus")
+    corpus = read_corpus(corpus.indexer_path / "corpus", "corpus")
     sentences = [s for s in corpus.test]
     for transformer, seed in zip(transformers, seeds):
         dac = DACModel.load(
-            indexers_path,
-            models_path,
-            indexer,
+            corpus,
             matcher_transformer=transformer,
             seed=seed,
             load_ranker_from_gcp=load_ranker_from_gcp,
@@ -63,9 +59,7 @@ def eval_mean(
 
 
 def eval_ensemble(
-    indexers_path,
-    models_path,
-    indexer,
+    corpus: DACCorpus,
     transformers: List[str],
     seeds: List[int],
     ensemble_type: str = "sum",  # max sum
@@ -77,13 +71,11 @@ def eval_ensemble(
     results_evaluation = {}
     for metric in metrics:
         return_probabilities = metric == Metrics.map
-        corpus = read_corpus(indexers_path / indexer / "corpus", "corpus")
+        corpus = read_corpus(corpus.indexer_path / "corpus", "corpus")
         sentences = [s for s in corpus.test]
         for transformer, seed in zip(transformers, seeds):
             dac = DACModel.load(
-                indexers_path,
-                models_path,
-                indexer,
+                corpus,
                 matcher_transformer=transformer,
                 seed=seed,
                 load_ranker_from_gcp=load_from_gcp,
